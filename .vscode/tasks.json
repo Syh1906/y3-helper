@@ -25,6 +25,18 @@
             "command": [
                 "npx @vscode/l10n-dev export -o ./dist ./src",
             ],
+        },
+        {
+            "type": "shell",
+            "label": "📦编译VSIX",
+            "command": "powershell",
+            "args": [
+                "-NoProfile",
+                "-Command",
+                "$pkg = Get-Content -LiteralPath 'package.json' -Raw | ConvertFrom-Json; New-Item -ItemType Directory -Force -Path 'dist/vsix' | Out-Null; npx --yes @vscode/vsce package --out \"dist/vsix/$($pkg.name)-$($pkg.version).vsix\""
+            ],
+            "group": "build",
+            "problemMatcher": "$ts-webpack",
         }
     ]
 }

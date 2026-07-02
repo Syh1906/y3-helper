@@ -7,6 +7,9 @@ import * as y3 from 'y3-helper';
 import { disposeMcpHub } from './codemaker/mcpHandlers';
 import SkillsHandler from './codemaker/skillsHandler';
 
+// 本地 VSIX 分支暂不执行 y3-maker-config 远端流程。
+// 保留本模块用于后续需要恢复自动 clone、迁移、更新时复用。
+
 // ─── 仓库地址 ────────────────────────────────────────────────
 
 const REPO_URLS = {

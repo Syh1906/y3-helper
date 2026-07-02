@@ -10,7 +10,6 @@ import * as mainMenu from './mainMenu';
 
 import { env } from './env';
 import { runShell } from './runShell';
-import { getConfigRepoUrl, checkForUpdates, migrateOldUser, performUpdate, forceRemoteUpdate, clearCachedUpdateStatus, getCachedUpdateStatus } from './y3makerConfig';
 import { LuaDocMaker } from './makeLuaDoc';
 import { GameLauncher } from './launchGame';
 import { NetworkServer } from './networkServer';
@@ -28,7 +27,8 @@ import * as ecaCompiler from './ecaCompiler';
 import * as l10n from '@vscode/l10n';
 import * as mcp from './mcp';
 import { getMcpHub } from './codemaker/mcpHandlers';
-import { initCodeMaker, stopCodeMaker, webviewProvider } from './codemaker';
+import { initCodeMaker, stopCodeMaker } from './codemaker';
+import { Y3_LUALIB_REPO_URL } from './y3LibrarySource';
 
 class Helper {
     private context: vscode.ExtensionContext;
@@ -57,54 +57,6 @@ class Helper {
         });
         vscode.commands.registerCommand('y3-helper.shell', async (...args: any[]) => {
             runShell(l10n.t("执行命令"), args[0], args.slice(1));
-        });
-    }
-
-    private registerCommandOfUpdateY3MakerConfig() {
-        vscode.commands.registerCommand('y3-helper.updateY3MakerConfig', async () => {
-            if (!env.projectUri) {
-                return;
-            }
-            await vscode.window.withProgress({
-                location: vscode.ProgressLocation.Notification,
-                title: l10n.t('正在更新 Y3Maker 配置...'),
-            }, async () => {
-                const result = await performUpdate(env.projectUri!);
-
-                if (result.success) {
-                    // 更新成功
-                    clearCachedUpdateStatus();
-                    if (webviewProvider) {
-                        await webviewProvider.reloadCodemakerResources();
-                    }
-                    mainMenu.refresh();
-                    vscode.window.showInformationMessage(l10n.t('Y3Maker 配置已更新成功！'));
-                } else {
-                    // 有冲突
-                    const useRemote = l10n.t('使用远端版本');
-                    const handleSelf = l10n.t('自行解决');
-                    const choice = await vscode.window.showWarningMessage(
-                        l10n.t('Y3Maker 配置更新时发生冲突，请选择处理方式：'),
-                        { modal: true },
-                        useRemote,
-                        handleSelf,
-                    );
-
-                    if (choice === useRemote) {
-                        await forceRemoteUpdate(env.projectUri!);
-                        clearCachedUpdateStatus();
-                        if (webviewProvider) {
-                            await webviewProvider.reloadCodemakerResources();
-                        }
-                        mainMenu.refresh();
-                        vscode.window.showInformationMessage(l10n.t('Y3Maker 配置已强制更新到远端版本！'));
-                    } else {
-                        vscode.window.showInformationMessage(
-                            l10n.t('请在终端中手动处理 .y3maker 目录的 git 冲突')
-                        );
-                    }
-                }
-            });
         });
     }
 
@@ -165,56 +117,15 @@ class Helper {
                     // ignore
                 }
 
-                const optionsGithub = 'Github (可能需要代理）';
-                const optionsGitee  = 'Gitee (国内镜像）';
-                let repoSource: 'github' | 'gitee' = 'github';
-                if (env.language === 'zh-cn') {
-                    let result = await vscode.window.showInformationMessage(l10n.t('请选择仓库来源：'),
-                    {
-                        modal: true,
-                    }, optionsGithub, optionsGitee);
-
-                    if (result === optionsGithub) {
-                        repoSource = 'github';
-                        // 从github上 clone 项目，地址为 "https://github.com/y3-editor/y3-lualib"
-                        await runShell(l10n.t("初始化Y3项目（Github）"), "git", [
-                            "clone",
-                            "https://github.com/y3-editor/y3-lualib.git",
-                            y3Uri.fsPath,
-                        ]);
-                    } else if (result === optionsGitee)  {
-                        repoSource = 'gitee';
-                        await runShell(l10n.t("初始化Y3项目（Gitee）"), "git", [
-                            "clone",
-                            "https://gitee.com/tsukiko/y3-lualib.git",
-                            y3Uri.fsPath,
-                        ]);
-                    } else {
-                        vscode.window.showWarningMessage(l10n.t('已取消初始化项目'));
-                        return;
-                    }
-                } else {
-                    await runShell(l10n.t("初始化Y3项目（Github）"), "git", [
-                        "clone",
-                        "https://github.com/CliCli-Editor/lualib.git",
-                        y3Uri.fsPath,
-                    ]);
-                }
+                await runShell(l10n.t("初始化Y3项目"), "git", [
+                    "clone",
+                    Y3_LUALIB_REPO_URL,
+                    y3Uri.fsPath,
+                ]);
 
                 if (!y3.fs.isExists(y3Uri, 'README.md')) {
                     vscode.window.showWarningMessage(l10n.t('仓库拉取失败！'));
                     return;
-                }
-
-                // 检查编辑器版本，如果是 1.0 版本则切换到 1.0 分支
-                let editorVersion = env.editorVersion;
-                if (editorVersion === '1.0') {
-                    await runShell(l10n.t("初始化Y3项目"), "git", [
-                        "checkout",
-                        "-b",
-                        "1.0",
-                        "origin/1.0"
-                    ], y3Uri);
                 }
 
                 // 初始化配置
@@ -233,23 +144,6 @@ class Helper {
                             }
                         );
                     } catch {}
-                }
-
-                // clone y3-maker-config 独立仓库到 .y3maker 目录
-                try {
-                    const y3makerTarget = vscode.Uri.joinPath(env.projectUri!, '.y3maker');
-                    const configRepoUrl = getConfigRepoUrl(repoSource);
-                    await runShell(l10n.t("初始化 Y3Maker 配置"), "git", [
-                        "clone",
-                        configRepoUrl,
-                        y3makerTarget.fsPath,
-                    ]);
-                    // 通知 Y3Maker 重新加载 Rules/Skills/MCP（因为 openFolder 同一目录不会触发窗口重载）
-                    if (webviewProvider) {
-                        await webviewProvider.reloadCodemakerResources();
-                    }
-                } catch (e) {
-                    y3.log.warn(l10n.t('克隆 y3-maker-config 失败: {0}', String(e)));
                 }
 
                 // 打开项目
@@ -497,7 +391,6 @@ class Helper {
 
         this.registerCommandOfNetworkServer();
         this.registerCommonCommands();
-        this.registerCommandOfUpdateY3MakerConfig();
 
         // 项目切换时自动清理 MCP 连接缓存并重新初始化
         vscode.workspace.onDidChangeWorkspaceFolders(async () => {
@@ -519,21 +412,13 @@ class Helper {
             await this.runStartupStep('checkNewProject', () => this.checkNewProject());
             await this.runStartupStep('mainMenu.init', () => mainMenu.init());
 
-            // 后台检测 Y3Maker 配置更新 + MCP 启动（需保证 migrateOldUser 在 MCP 前完成，否则 McpHub 会误创建 .y3maker 目录）
+            // 本地 VSIX 分支不再自动 clone、迁移或更新 y3-maker-config。
             (async () => {
                 try {
                     await env.mapReady();
                     if (!env.project) {
                         return;
                     }
-                    // 先检测是否需要老用户迁移/恢复，必须在 MCP 启动前完成
-                    const migrated = await migrateOldUser(env.projectUri!);
-                    if (migrated && webviewProvider) {
-                        await webviewProvider.reloadCodemakerResources();
-                    }
-                    // 检测版本更新
-                    await checkForUpdates(env.projectUri!);
-                    // 刷新主菜单树视图，使更新节点根据状态显示/隐藏
                     mainMenu.refresh();
                 } catch {
                     // 静默跳过

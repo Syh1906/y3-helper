@@ -14,6 +14,12 @@
 | [06-功能流程详解.md](./06-功能流程详解.md) | 启动游戏、调试附加、初始化项目、Excel导表、插件系统等关键功能的完整流程 |
 | [07-工具层与基础设施.md](./07-工具层与基础设施.md) | tools、utility、console 通信等基础工具层的说明 |
 
+## 本地 VSIX 分支说明
+
+当前分支用于本地打包 VSIX，不走 VSCode 插件市场发布流程。初始化 Y3 库时只拉取 `https://github.com/Syh1906/y3-lualib.git`。
+
+`y3-maker-config` 的自动 clone、迁移、更新流程已暂停。后续如需恢复，先查看 `src/y3makerConfig.ts`、历史菜单节点 `src/mainMenu/pages/y3makerConfigUpdate.ts`，以及本文件变更前的 `src/extension.ts` 调用链。
+
 ## 快速开始
 
 如果你是新加入的维护者，建议按以下顺序阅读：
