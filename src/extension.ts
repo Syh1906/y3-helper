@@ -27,6 +27,8 @@ import * as ecaCompiler from './ecaCompiler';
 import * as l10n from '@vscode/l10n';
 import * as mcp from './mcp';
 import { getMcpHub } from './codemaker/mcpHandlers';
+import { registerAgentAccessCenter } from './agentAccessCenter';
+import { canAutoStartMcp, getMcpStartMode } from './mcp/config';
 import { initCodeMaker, stopCodeMaker } from './codemaker';
 import { Y3_LUALIB_REPO_URL } from './y3LibrarySource';
 import {
@@ -66,6 +68,13 @@ class Helper {
             if (event.affectsConfiguration('Y3-Helper.EditorPath')) {
                 tools.log.info(l10n.t('配置已更新，已重新加载环境'));
                 await env.updateEditor();
+            }
+            if (event.affectsConfiguration('Y3-Helper.MCP.StartMode')) {
+                if (getMcpStartMode() === 'off') {
+                    this.stopTCPServer();
+                } else {
+                    void this.tryAutoStartMCP();
+                }
             }
         });
     }
@@ -548,11 +557,15 @@ class Helper {
         if (this.tcpServer || this.autoStartMCPTask) {
             return;
         }
+        if (getMcpStartMode() !== 'auto') {
+            return;
+        }
 
         this.autoStartMCPTask = (async () => {
             try {
                 await env.mapReady();
-                if (this.tcpServer || !await this.isY3Initialized()) {
+                const initialized = await this.isY3Initialized();
+                if (!canAutoStartMcp(getMcpStartMode(), this.tcpServer !== undefined, initialized)) {
                     return;
                 }
                 await this.runStartupStep('startMCPServer', () => this.startTCPServer(true));
@@ -597,6 +610,10 @@ class Helper {
 
     private registerCommandOfMCP() {
         vscode.commands.registerCommand('y3-helper.startMCPServer', async () => {
+            if (getMcpStartMode() === 'off') {
+                vscode.window.showInformationMessage(l10n.t('MCP Server 已在设置中关闭'));
+                return;
+            }
             if (this.tcpServer) {
                 vscode.window.showInformationMessage(l10n.t('MCP Server 已经在运行'));
                 return;
@@ -614,6 +631,36 @@ class Helper {
             this.stopTCPServer();
             vscode.window.showInformationMessage(l10n.t('MCP Server 已停止'));
         });
+    }
+
+    private registerCommandOfAgentAccessCenter() {
+        const disposables = registerAgentAccessCenter({
+            isMcpRunning: () => this.tcpServer !== undefined,
+            startMcp: async () => {
+                if (getMcpStartMode() === 'off') {
+                    vscode.window.showInformationMessage(l10n.t('MCP Server 已在设置中关闭'));
+                    return false;
+                }
+                if (this.tcpServer) {
+                    vscode.window.showInformationMessage(l10n.t('MCP Server 已经在运行'));
+                    return true;
+                }
+                const started = await this.startTCPServer();
+                if (started) {
+                    vscode.window.showInformationMessage(l10n.t('MCP Server 已启动'));
+                }
+                return started;
+            },
+            stopMcp: () => {
+                if (!this.tcpServer) {
+                    vscode.window.showInformationMessage(l10n.t('MCP Server 未运行'));
+                    return;
+                }
+                this.stopTCPServer();
+                vscode.window.showInformationMessage(l10n.t('MCP Server 已停止'));
+            },
+        });
+        this.context.subscriptions.push(...disposables);
     }
 
     private checkNewProject() {
@@ -660,6 +707,7 @@ class Helper {
         this.registerCommandOfAttach();
         this.registerCommandOfLaunchEditor();
         this.registerCommandOfMCP();
+        this.registerCommandOfAgentAccessCenter();
 
         this.reloadEnvWhenConfigChange();
 

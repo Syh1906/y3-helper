@@ -20,7 +20,9 @@
         "workspaceContains:y3/CHANGELOG.md",
         "onDebugResolve:y3lua",
         "onCommand:y3-helper.startMCPServer",
-        "onCommand:y3-helper.stopMCPServer"
+        "onCommand:y3-helper.stopMCPServer",
+        "onCommand:y3-helper.openAgentAccessCenter",
+        "onCommand:y3-helper.createAgentsMarkdown"
     ],
     "main": "./dist/extension.js",
     "capabilities": {
@@ -393,6 +395,16 @@
                 "command": "y3-helper.codemaker.open",
                 "title": "打开 Y3Maker",
                 "category": "%Y3开发助手%"
+            },
+            {
+                "command": "y3-helper.openAgentAccessCenter",
+                "title": "%Agent 接入中心%",
+                "category": "%Y3开发助手%"
+            },
+            {
+                "command": "y3-helper.createAgentsMarkdown",
+                "title": "%生成 Agent 指南%",
+                "category": "%Y3开发助手%"
             }
         ],
         "configuration": {
@@ -422,6 +434,23 @@
                     "default": 0,
                     "minimum": 0,
                     "maximum": 65535,
+                    "scope": "resource"
+                },
+                "Y3-Helper.MCP.StartMode": {
+                    "title": "%MCP Server 启动模式%",
+                    "description": "%控制 Y3-Helper MCP Server 是否随项目自动启动。off 表示关闭，manual 表示仅手动启动，auto 表示识别到已初始化项目后自动启动。%",
+                    "type": "string",
+                    "enum": [
+                        "off",
+                        "manual",
+                        "auto"
+                    ],
+                    "enumDescriptions": [
+                        "%关闭 MCP Server%",
+                        "%仅手动启动 MCP Server%",
+                        "%自动启动 MCP Server%"
+                    ],
+                    "default": "manual",
                     "scope": "resource"
                 },
                 "Y3-Helper.ECAOverridePath": {
