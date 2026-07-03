@@ -193,6 +193,11 @@
                 "category": "%Y3开发助手%"
             },
             {
+                "command": "y3-helper.initMapGitProject",
+                "title": "初始化地图工程版本管理",
+                "category": "%Y3开发助手%"
+            },
+            {
                 "command": "y3-helper.makeLuaDoc",
                 "title": "生成接口文档",
                 "category": "%Y3开发助手%"

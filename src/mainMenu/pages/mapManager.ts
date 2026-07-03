@@ -52,6 +52,17 @@ export class 地图管理 extends TreeNode {
                     openScriptFolder.tooltip = l10n.t('会重启VSCode窗口');
                     node.childs.push(openScriptFolder);
                 }
+                if (y3.env.projectUri) {
+                    node.childs.push(new TreeNode(l10n.t('初始化版本管理'), {
+                        iconPath: new vscode.ThemeIcon('source-control'),
+                        description: l10n.t('Git + Y3库子模块'),
+                        tooltip: l10n.t('在完整地图工程根目录初始化 Git，并将脚本目录下的 y3 库登记为子模块'),
+                        command: {
+                            command: 'y3-helper.initMapGitProject',
+                            title: l10n.t('初始化版本管理'),
+                        },
+                    }));
+                }
                 node.childs.push(new TreeNode(l10n.t('启用全局脚本'), {
                     iconPath: new vscode.ThemeIcon('remote-explorer'),
                     tooltip: l10n.t('所有地图都可以使用全局脚本。地图内的脚本优先级高于全局脚本。'),
