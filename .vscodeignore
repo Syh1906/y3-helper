@@ -23,6 +23,10 @@ out/
 webpack.config.json
 .worktrees/
 resources/webview_source_code/
+.codemaker/
+scripts/
+sync_scripts/
+文档/
 
 .omx/
 .y3maker/

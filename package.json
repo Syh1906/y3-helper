@@ -1,11 +1,11 @@
 {
-    "name": "y3-helper",
-    "displayName": "Y3开发助手",
+    "name": "y3-helper-local",
+    "displayName": "Y3开发助手（本地分叉版）",
     "description": "",
-    "publisher": "sumneko",
-    "version": "2.1.1",
+    "publisher": "syh1906",
+    "version": "1.0.0",
     "repository": {
-        "url": "https://github.com/y3-editor/y3-helper"
+        "url": "https://github.com/Syh1906/y3-helper"
     },
     "engines": {
         "vscode": "^1.96.0"
@@ -591,6 +591,7 @@
     "icon": "image/logo.png",
     "scripts": {
         "vscode:prepublish": "webpack --mode production",
+        "package:vsix": "node scripts/package-vsix.js",
         "compile": "webpack --mode none",
         "watch": "webpack --mode none --watch",
         "pretest": "npm run compile && npm run lint && npm run compile-tests",
@@ -642,6 +643,7 @@
         "@vscode/dts": "^0.4.1",
         "@vscode/l10n-dev": "^0.0.35",
         "@vscode/test-electron": "^2.3.6",
+        "@vscode/vsce": "3.9.2",
         "@xterm/addon-fit": "^0.11.0",
         "@xterm/xterm": "^6.0.0",
         "css-loader": "^7.1.4",

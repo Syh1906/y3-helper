@@ -1,50 +1,70 @@
-# CliCli-Helper
+# Y3 Helper Local Fork
 
-## Initialize Project (For new maps only, do not use for old maps!)
+This is the local VSIX fork of `Syh1906/y3-helper`. This branch is not published to the VSCode Marketplace. Build the `.vsix` package from source and install it manually.
 
-1. Click the "CliCli-Helper" icon in the left sidebar, then click "Initialize"
-2. Select the map path
-3. Done!
+Extension identity:
 
-## Feature Panel
+```text
+syh1906.y3-helper-local
+```
 
-Includes common features such as "Start Game", "Open in Editor", "View Logs", etc.
+## Install
 
-When you start the game using this helper, the game will connect to the development helper and provide additional features:
+```bash
+git clone https://github.com/Syh1906/y3-helper.git
+cd y3-helper
+npm install
+npm run package:vsix
+```
 
-1. One-click hot reload
-2. Display a dashboard in the "Custom View" area to monitor game status and quickly restart
-3. Use the remote terminal in the "Terminal" area of VSCode to display game logs and execute commands
+The VSIX package is generated at:
 
-## Object Editor Support
+```text
+dist/vsix/y3-helper-local-1.0.0.vsix
+```
 
-After opening the map, you can browse and edit object editor data (`.json` files) in `Explorer/CliCli-Helper: Object Editor Data`.
+In VSCode, run `Extensions: Install from VSIX...` and select the generated file.
 
-After opening an object editor JSON file, you can view and jump to fields in Chinese in the `Explorer/Outline/CliCli-Helper: Object Editor Fields` view.
+## Features
 
-### Search
+Y3 Helper supports common Y3 map development tasks:
 
-Press `Ctrl+T` to search object editor data, for example, use `#GuanYu` to search for all object editor data with "GuanYu" in the name. Use `#GuanYu.ori_speed` to search for a specific object editor field.
+1. Project initialization for new maps
+2. Launching the game and editor
+3. Lua debugging and log viewing
+4. Object editor data browsing and editing
+5. Excel table import
+6. Plugin scripts
+7. Built-in MCP HTTP server
 
-> You can also use numeric keys and English field names to search. Delimiters support `.` and `/`.
+## MCP
 
-## Advanced Applications
+MCP means Model Context Protocol. In this fork, the MCP server runs inside the VSCode extension process. It does not use a standalone `mcp-server.js` file.
 
-### Remote Terminal
+Start it from the sidebar:
 
-After the map is published to the platform, you can use the remote terminal feature to debug the online map.
+```text
+Y3开发助手 -> MCP Server -> 启动 MCP Server
+```
 
-> This feature should only be enabled on the test server.
+Then connect an MCP client that supports Streamable HTTP to:
 
-1. Embed initialization code in your script, such as:
-    ```lua
-    y3.game:event('Player-Send Specific Message', 'Link Start', function (trg, data)
-        y3.develop.helper.init(11037)
-    end)
-    -- Allow local code execution on the platform
-    y3.config.code.enable_local = true
-    ```
-2. Change the `CliCli-Helper.ServerPort` in VSCode settings to the same port number `11037`
-3. Restart VSCode to ensure the plugin applies the new port number
-4. Click the "CliCli Development Helper" icon in the sidebar to ensure the helper is started
-5. Execute the initialization code embedded in step 1 to connect to the remote terminal by running `y3.develop.helper.init(11037)`
+```text
+http://127.0.0.1:8766/mcp
+```
+
+Health check:
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8766/health
+```
+
+Expected fields include `status: ok`, `transport: streamable-http`, and `port: 8766`.
+
+## Development
+
+1. Install VSCode and Node.js
+2. Open this repository in VSCode
+3. Run `npm install`
+4. Press `Ctrl+Shift+B` to compile
+5. Press `F5` to launch an extension development host
