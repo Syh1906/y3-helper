@@ -20,7 +20,7 @@ npm run package:vsix
 The VSIX package is generated at:
 
 ```text
-dist/vsix/y3-helper-local-1.0.0.vsix
+dist/vsix/y3-helper-local-1.0.1.vsix
 ```
 
 In VSCode, run `Extensions: Install from VSIX...` and select the generated file.
