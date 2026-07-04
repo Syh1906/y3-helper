@@ -6,7 +6,7 @@
         {
             "type": "npm",
             "script": "compile",
-            "problemMatcher": "$ts-webpack",
+            "problemMatcher": [],
             "isBackground": false,
             "group": {
                 "kind": "build",
@@ -30,8 +30,11 @@
             "type": "shell",
             "label": "📦编译VSIX",
             "command": "npm run package:vsix",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
             "group": "build",
-            "problemMatcher": "$ts-webpack",
+            "problemMatcher": [],
         }
     ]
 }

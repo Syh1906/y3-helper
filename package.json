@@ -20,15 +20,9 @@
         "workspaceContains:y3/CHANGELOG.md",
         "onDebugResolve:y3lua",
         "onCommand:y3-helper.startMCPServer",
-        "onCommand:y3-helper.stopMCPServer",
-        "onCommand:y3-helper.openAgentAccessCenter",
-        "onCommand:y3-helper.createAgentsMarkdown"
+        "onCommand:y3-helper.stopMCPServer"
     ],
     "main": "./dist/extension.js",
-    "capabilities": {
-        "workspaceSymbolProvider": "true",
-        "documentSymbolProvider": "true"
-    },
     "l10n": "./l10n",
     "contributes": {
         "views": {
