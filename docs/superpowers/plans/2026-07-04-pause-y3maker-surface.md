@@ -57,7 +57,7 @@
 
 - [x] `npm run compile` 通过。
 - [x] `npm test` 通过。
-- [x] `npm run package:vsix` 生成 `dist/vsix/y3-helper-local-1.0.1.vsix`。
+- [x] `npm run package:vsix` 生成 `dist/vsix/y3-helper-local-1.0.2.vsix`。
 - [x] VSIX 清单核验确认没有 Y3Maker 侧边栏、webview、打开命令和聊天设置。
 - [x] 搜索确认 `package.json`、`src/extension.ts`、`src/mainMenu/mainMenu.ts` 没有活动接线残留。
 

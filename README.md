@@ -20,7 +20,7 @@ npm run package:vsix
 生成的安装包位于：
 
 ```text
-dist/vsix/y3-helper-local-1.0.1.vsix
+dist/vsix/y3-helper-local-1.0.2.vsix
 ```
 
 在 VSCode 中按 `Ctrl+Shift+P`，输入 `Extensions: Install from VSIX...`，选择该 `.vsix` 文件安装。

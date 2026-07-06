@@ -6,9 +6,15 @@
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-07-06
+
 ### 变更
 
 - 暂停 Y3Maker AI 面板、`Y3Maker.CodeChat*` 设置项、主菜单入口和扩展启动链路；保留 `src/codemaker/`、`src/y3makerConfig.ts` 与历史菜单节点作为后续恢复锚点。
+
+### 修复
+
+- 修复 `PING_MCP_SERVERS` 被当成重启处理的问题，ping 操作不再触发 MCP server 重启。
 
 ## [1.0.1] - 2026-07-04
 
@@ -21,6 +27,7 @@
 
 ### 变更
 
+- 修复 VS Code 插件清单中的配置警告。
 - MCP Server 自动启动遵循扩展配置，不再强制静默启动。
 
 ## [1.0.0] - 2026-07-04
