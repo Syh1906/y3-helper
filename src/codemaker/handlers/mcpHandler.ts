@@ -8,6 +8,7 @@
 
 import type { CodeMakerWebviewProvider } from '../webviewProvider';
 import { getMcpHub } from '../mcpHandlers/index';
+import { McpServerAction, runMcpServerAction } from './mcpActions';
 
 export function handleGetMcpServers() {
     const hub = getMcpHub();
@@ -55,15 +56,10 @@ export async function handleOpenMcpSetting() {
     }
 }
 
-export async function handlePingOrRestartMcpServers(data: any) {
+export async function handlePingOrRestartMcpServers(action: McpServerAction, data: any) {
     const hub = getMcpHub();
     if (hub) {
-        const serverName = data?.name || data?.serverName;
-        if (serverName) {
-            await hub.restartConnection(serverName);
-        } else {
-            await hub.restartAllConnections();
-        }
+        await runMcpServerAction(hub, action, data);
     } else {
         console.warn('[Y3Maker] McpHub 未初始化，无法重启 MCP servers');
     }

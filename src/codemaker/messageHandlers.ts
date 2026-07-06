@@ -305,9 +305,13 @@ export async function handleExtendedMessage(
             return true;
         }
 
-        case 'PING_MCP_SERVERS':
+        case 'PING_MCP_SERVERS': {
+            await handlePingOrRestartMcpServers('PING_MCP_SERVERS', message.data);
+            return true;
+        }
+
         case 'RESTART_MCP_SERVERS': {
-            await handlePingOrRestartMcpServers(message.data);
+            await handlePingOrRestartMcpServers('RESTART_MCP_SERVERS', message.data);
             return true;
         }
 
