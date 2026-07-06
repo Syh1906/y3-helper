@@ -4,7 +4,7 @@
 
 # Y3开发助手（本地分叉版）
 
-这是 `Syh1906/y3-helper` 的本地 VSIX 分叉版。这个分支不发布到 VSCode 插件市场，只从源码构建 `.vsix` 后安装。扩展身份为 `syh1906.y3-helper-local`，版本线从 `1.0.0` 开始。
+这是 `Syh1906/y3-helper` 的本地 VSIX 分叉版。这个分支不发布到 VSCode 插件市场，只从源码构建 `.vsix` 后安装。扩展身份为 `syh1906.y3-helper-local`，版本线从 `1.0.0` 开始。当前版本暂停 Y3Maker AI 面板、聊天设置和启动链路，保留源码作为后续恢复锚点。
 
 ## 安装
 
@@ -33,7 +33,7 @@ dist/vsix/y3-helper-local-1.0.1.vsix
 
 ## 功能面板
 
-包含“启动游戏”、“在编辑器中打开”、“查看日志”等常用功能。
+包含“启动游戏”、“在编辑器中打开”、“查看日志”等常用功能。当前不会显示右侧 `Y3Maker` 面板，也不会在启动时拉起 CodeMaker API Server。
 
 当使用此助手启动游戏后，游戏会连接到开发助手，并额外提供以下功能：
 
@@ -90,7 +90,7 @@ dist/vsix/y3-helper-local-1.0.1.vsix
 
 MCP 是 Model Context Protocol 的缩写。这里的 MCP Server 是扩展内置的本地 HTTP 服务，用于让支持 MCP 的 AI 工具连接 Y3-Helper，进而启动游戏、读取状态、执行 Lua、读取日志和获取 UI 数据。
 
-当前本地分叉版保留 MCP 能力，但不提供独立的 `mcp-server.js` 文件。MCP 服务由 VSCode 扩展进程启动，地址为：
+当前本地分叉版保留 MCP 能力，它不依赖已暂停的 Y3Maker 面板。扩展不提供独立的 `mcp-server.js` 文件；MCP 服务由 VSCode 扩展进程启动，地址为：
 
 ```text
 http://127.0.0.1:8766/mcp

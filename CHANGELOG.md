@@ -6,6 +6,10 @@
 
 ## [Unreleased]
 
+### 变更
+
+- 暂停 Y3Maker AI 面板、`Y3Maker.CodeChat*` 设置项、主菜单入口和扩展启动链路；保留 `src/codemaker/`、`src/y3makerConfig.ts` 与历史菜单节点作为后续恢复锚点。
+
 ## [1.0.1] - 2026-07-04
 
 ### 新增

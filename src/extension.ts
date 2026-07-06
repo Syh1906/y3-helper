@@ -29,7 +29,6 @@ import * as mcp from './mcp';
 import { getMcpHub } from './codemaker/mcpHandlers';
 import { registerAgentAccessCenter } from './agentAccessCenter';
 import { canAutoStartMcp, getMcpStartMode } from './mcp/config';
-import { initCodeMaker, stopCodeMaker } from './codemaker';
 import { Y3_LUALIB_REPO_URL } from './y3LibrarySource';
 import {
     SHARED_WORKSPACE_FILE,
@@ -785,10 +784,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
     helper.start();
 
-    // 初始化 CodeMaker 模块
-    initCodeMaker(context);
 }
 
 export function deactivate() {
-    stopCodeMaker();
 }

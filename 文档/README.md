@@ -18,7 +18,7 @@
 
 当前分支用于本地打包 VSIX，不走 VSCode 插件市场发布流程。扩展身份是 `syh1906.y3-helper-local`，版本线从 `1.0.0` 开始。初始化 Y3 库时只拉取 `https://github.com/Syh1906/y3-lualib.git`。
 
-`y3-maker-config` 的自动 clone、迁移、更新流程已暂停。后续如需恢复，先查看 `src/y3makerConfig.ts`、历史菜单节点 `src/mainMenu/pages/y3makerConfigUpdate.ts`，以及本文件变更前的 `src/extension.ts` 调用链。
+当前同时暂停两条 Y3Maker 相关链路：一是 `y3-maker-config` 的自动 clone、迁移、更新流程；二是 Y3Maker AI 面板、聊天设置、主菜单入口和启动时的 CodeMaker 初始化。后续如需恢复，先查看 `src/codemaker/`、`src/y3makerConfig.ts`、`src/mainMenu/pages/codemaker.ts`、`src/mainMenu/pages/y3makerConfigUpdate.ts`，以及本次变更前的 `package.json` 与 `src/extension.ts` 调用链。
 
 ## 快速开始
 
