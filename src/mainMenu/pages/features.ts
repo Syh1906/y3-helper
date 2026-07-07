@@ -7,6 +7,7 @@ import { TreeViewManager } from "../../console/treeView";
 import { WebviewTerminal } from "../../console/webviewTerminal";
 import * as globalScript from '../../globalScript';
 import * as l10n from '@vscode/l10n';
+import { isY3LibraryUsable } from '../../y3ProjectInit';
 
 function 多开模式() {
     let node = new TreeNode(l10n.t('多开模式'), {
@@ -115,16 +116,16 @@ export class 功能 extends TreeNode {
                         title: l10n.t('初始化Y3库'),
                     },
                     update: async (node) => {
-                        node.iconPath = new vscode.ThemeIcon('cloud-download');
-                        if (await y3.fs.isExists(vscode.Uri.joinPath(env.y3Uri!, '更新日志.md')) ||
-                            await y3.fs.isExists(vscode.Uri.joinPath(env.y3Uri!, 'CHANGELOG.md'))) {
-                            node.iconPath = new vscode.ThemeIcon('check');
-                        }
+                        const usable = env.y3Uri ? await isY3LibraryUsable(env.y3Uri.fsPath) : false;
+                        node.iconPath = usable
+                            ? new vscode.ThemeIcon('check')
+                            : new vscode.ThemeIcon('cloud-download');
+                        node.tooltip = usable
+                            ? l10n.t('Y3 库已就绪，可再次点击修复项目配置')
+                            : l10n.t('安装 Y3 库或修复项目配置');
                     },
                     show: async () => {
-                        return !await y3.fs.isExists(vscode.Uri.joinPath(env.y3Uri!, '更新日志.md'))
-                            && !await y3.fs.isExists(vscode.Uri.joinPath(env.y3Uri!, 'CHANGELOG.md'))
-                            && !await globalScript.isEnabled();
+                        return !await globalScript.isEnabled();
                     }
                 }),
                 new TreeNode(l10n.t('编辑器需要更新！'), {

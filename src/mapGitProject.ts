@@ -31,6 +31,27 @@ export type Y3SubmoduleState =
     | 'not-git'
     | 'unknown';
 
+export type Y3GitManagementMode =
+    | 'skip'
+    | 'track-plain-directory'
+    | 'submodule'
+    | 'keep-independent-git'
+    | 'existing-submodule';
+
+export type Y3LibraryGitPlan =
+    | { kind: 'skip'; gitArgs: string[] }
+    | { kind: 'track-plain-directory'; gitArgs: string[] }
+    | { kind: 'keep-independent-git'; gitArgs: string[] }
+    | { kind: 'run-git'; gitArgs: string[][] }
+    | { kind: 'blocked'; message: string };
+
+export interface Y3LibraryGitManagementInput {
+    mode: Y3GitManagementMode;
+    state: Y3SubmoduleProbe;
+    repoUrl: string;
+    relativePath: string;
+}
+
 export interface Y3SubmoduleProbe {
     exists: boolean;
     submoduleStatusLine?: string;
@@ -187,6 +208,71 @@ export function classifyY3SubmoduleState(probe: Y3SubmoduleProbe, expectedRepoUr
     return 'plain-git-clean';
 }
 
+export function planY3LibraryGitManagement(input: Y3LibraryGitManagementInput): Y3LibraryGitPlan {
+    if (input.mode === 'skip') {
+        return { kind: 'skip', gitArgs: [] };
+    }
+
+    if (input.mode === 'track-plain-directory') {
+        if (!input.state.exists) {
+            return { kind: 'blocked', message: 'Y3 库目录不存在，不能作为普通目录纳入工程 Git。' };
+        }
+        if (input.state.isGitWorkTree === false) {
+            return { kind: 'track-plain-directory', gitArgs: [] };
+        }
+        return { kind: 'blocked', message: 'Y3 库目录不是普通复制目录，请重新选择管理方式。' };
+    }
+
+    if (input.mode === 'keep-independent-git') {
+        if (!input.state.exists || !input.state.isGitWorkTree) {
+            return { kind: 'blocked', message: 'Y3 库目录不是独立 Git 仓库。' };
+        }
+        if ((input.state.statusPorcelain ?? '').trim().length > 0) {
+            return { kind: 'blocked', message: 'Y3 库独立 Git 仓库存在未提交改动，请先提交或清理。' };
+        }
+        return { kind: 'keep-independent-git', gitArgs: [] };
+    }
+
+    if (input.mode === 'existing-submodule') {
+        if (input.state.submoduleStatusLine === undefined) {
+            return { kind: 'blocked', message: 'Y3 库尚未登记为子模块。' };
+        }
+        if ((input.state.statusPorcelain ?? '').trim().length > 0) {
+            return { kind: 'blocked', message: 'Y3 库子模块存在本地改动，请先提交或清理。' };
+        }
+        const status = parseSubmoduleStatus(input.state.submoduleStatusLine);
+        if (status === 'not-initialized') {
+            return { kind: 'run-git', gitArgs: [makeSubmoduleUpdateInitArgs(input.relativePath)] };
+        }
+        if (status === 'clean') {
+            return { kind: 'run-git', gitArgs: [] };
+        }
+        return { kind: 'blocked', message: 'Y3 库子模块状态需要先手动处理。' };
+    }
+
+    const state = classifyY3SubmoduleState(input.state, input.repoUrl);
+    if (state === 'missing') {
+        return { kind: 'run-git', gitArgs: [makeSubmoduleAddArgs(input.repoUrl, input.relativePath)] };
+    }
+    if (state === 'submodule-not-initialized') {
+        return { kind: 'run-git', gitArgs: [makeSubmoduleUpdateInitArgs(input.relativePath)] };
+    }
+    if (state === 'plain-git-clean') {
+        return {
+            kind: 'run-git',
+            gitArgs: [
+                makeSubmoduleAddExistingArgs(input.repoUrl, input.relativePath),
+                makeSubmoduleAbsorbGitDirsArgs(input.relativePath),
+            ],
+        };
+    }
+    if (state === 'already-submodule') {
+        return { kind: 'run-git', gitArgs: [] };
+    }
+
+    return { kind: 'blocked', message: 'Y3 库当前状态无法自动配置为子模块。' };
+}
+
 export function makeSubmoduleAddArgs(repoUrl: string, relativePath: string): string[] {
     return ['submodule', 'add', repoUrl, toPosixRelativePath(relativePath)];
 }
@@ -207,12 +293,12 @@ export function makeGitInitArgs(): string[] {
     return ['init'];
 }
 
-export function makeGitAddDryRunArgs(): string[] {
-    return ['add', '--dry-run', '.'];
+export function makeGitAddDryRunArgs(excludePaths: string[] = []): string[] {
+    return makeGitAddArgsBase(['add', '--dry-run', '.'], excludePaths);
 }
 
-export function makeGitAddArgs(): string[] {
-    return ['add', '.'];
+export function makeGitAddArgs(excludePaths: string[] = []): string[] {
+    return makeGitAddArgsBase(['add', '.'], excludePaths);
 }
 
 export function makeGitCommitArgs(message: string): string[] {
@@ -330,6 +416,14 @@ function normalizeNewlines(value: string): string {
 
 function normalizeRepoUrl(value: string): string {
     return value.trim().replace(/\/+$/, '').replace(/\.git$/i, '').toLowerCase();
+}
+
+function makeGitAddArgsBase(baseArgs: string[], excludePaths: string[]): string[] {
+    const excludes = excludePaths.map(path => `:(exclude)${toPosixRelativePath(path)}`);
+    if (excludes.length === 0) {
+        return baseArgs;
+    }
+    return [...baseArgs.slice(0, -1), '--', baseArgs[baseArgs.length - 1], ...excludes];
 }
 
 async function pathExists(path: string): Promise<boolean> {

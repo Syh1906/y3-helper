@@ -20,6 +20,7 @@ import {
     makeSubmoduleUpdateInitArgs,
     mergeMapGitignore,
     parseSubmoduleStatus,
+    planY3LibraryGitManagement,
     probeY3Submodule,
     readTextFileIfExists,
     toPosixRelativePath,
@@ -94,6 +95,17 @@ suite('Map Git project initialization', () => {
             assert.deepStrictEqual(makeGitInitArgs(), ['init']);
             assert.deepStrictEqual(makeGitAddDryRunArgs(), ['add', '--dry-run', '.']);
             assert.deepStrictEqual(makeGitAddArgs(), ['add', '.']);
+        });
+
+        test('builds add args that exclude unmanaged y3 library path', () => {
+            assert.deepStrictEqual(
+                makeGitAddDryRunArgs(['maps/EntryMap/script/y3']),
+                ['add', '--dry-run', '--', '.', ':(exclude)maps/EntryMap/script/y3'],
+            );
+            assert.deepStrictEqual(
+                makeGitAddArgs(['maps\\EntryMap\\script\\y3']),
+                ['add', '--', '.', ':(exclude)maps/EntryMap/script/y3'],
+            );
         });
 
         test('builds submodule add args without shell quoting', () => {
@@ -227,6 +239,143 @@ suite('Map Git project initialization', () => {
                 exists: true,
                 submoduleStatusLine: '?abc123 maps/EntryMap/script/y3',
             }, repoUrl), 'unknown');
+        });
+    });
+
+    suite('planY3LibraryGitManagement', () => {
+        test('skips y3 library Git management when requested', () => {
+            const plan = planY3LibraryGitManagement({
+                mode: 'skip',
+                state: { exists: false },
+                repoUrl: 'https://example.com/y3.git',
+                relativePath: 'maps/EntryMap/script/y3',
+            });
+
+            assert.strictEqual(plan.kind, 'skip');
+            assert.deepStrictEqual(plan.gitArgs, []);
+        });
+
+        test('allows plain copied y3 directory when tracking as normal project files', () => {
+            const plan = planY3LibraryGitManagement({
+                mode: 'track-plain-directory',
+                state: { exists: true, isGitWorkTree: false },
+                repoUrl: 'https://example.com/y3.git',
+                relativePath: 'maps/EntryMap/script/y3',
+            });
+
+            assert.strictEqual(plan.kind, 'track-plain-directory');
+            assert.deepStrictEqual(plan.gitArgs, []);
+        });
+
+        test('blocks tracking a missing y3 library as a plain directory', () => {
+            const plan = planY3LibraryGitManagement({
+                mode: 'track-plain-directory',
+                state: { exists: false },
+                repoUrl: 'https://example.com/y3.git',
+                relativePath: 'maps/EntryMap/script/y3',
+            });
+
+            assert.strictEqual(plan.kind, 'blocked');
+            assert.ok(plan.message.includes('不存在'));
+        });
+
+        test('keeps independent git repository without submodule migration', () => {
+            const plan = planY3LibraryGitManagement({
+                mode: 'keep-independent-git',
+                state: {
+                    exists: true,
+                    isGitWorkTree: true,
+                    originUrl: 'https://example.com/y3.git',
+                    statusPorcelain: '',
+                },
+                repoUrl: 'https://example.com/y3.git',
+                relativePath: 'maps/EntryMap/script/y3',
+            });
+
+            assert.strictEqual(plan.kind, 'keep-independent-git');
+            assert.deepStrictEqual(plan.gitArgs, []);
+        });
+
+        test('uses custom repository url when adding a missing submodule', () => {
+            const plan = planY3LibraryGitManagement({
+                mode: 'submodule',
+                state: { exists: false },
+                repoUrl: 'https://example.com/custom.git',
+                relativePath: 'maps/EntryMap/script/y3',
+            });
+
+            assert.strictEqual(plan.kind, 'run-git');
+            assert.deepStrictEqual(plan.gitArgs, [
+                ['submodule', 'add', 'https://example.com/custom.git', 'maps/EntryMap/script/y3'],
+            ]);
+        });
+
+        test('does not accept dirty independent git repository as keep-independent-git without user action', () => {
+            const plan = planY3LibraryGitManagement({
+                mode: 'keep-independent-git',
+                state: {
+                    exists: true,
+                    isGitWorkTree: true,
+                    originUrl: 'https://example.com/y3.git',
+                    statusPorcelain: ' M README.md',
+                },
+                repoUrl: 'https://example.com/y3.git',
+                relativePath: 'maps/EntryMap/script/y3',
+            });
+
+            assert.strictEqual(plan.kind, 'blocked');
+            assert.ok(plan.message.includes('未提交改动'));
+        });
+
+        test('blocks tracking an independent git repository as a plain directory', () => {
+            const plan = planY3LibraryGitManagement({
+                mode: 'track-plain-directory',
+                state: {
+                    exists: true,
+                    isGitWorkTree: true,
+                    originUrl: 'https://example.com/y3.git',
+                    statusPorcelain: '',
+                },
+                repoUrl: 'https://example.com/y3.git',
+                relativePath: 'maps/EntryMap/script/y3',
+            });
+
+            assert.strictEqual(plan.kind, 'blocked');
+            assert.ok(plan.message.includes('普通复制目录'));
+        });
+
+        test('initializes an existing registered submodule without adding another submodule', () => {
+            const plan = planY3LibraryGitManagement({
+                mode: 'existing-submodule',
+                state: {
+                    exists: true,
+                    submoduleStatusLine: '-abc123 maps/EntryMap/script/y3',
+                    statusPorcelain: '',
+                },
+                repoUrl: 'https://example.com/y3.git',
+                relativePath: 'maps/EntryMap/script/y3',
+            });
+
+            assert.strictEqual(plan.kind, 'run-git');
+            assert.deepStrictEqual(plan.gitArgs, [
+                ['submodule', 'update', '--init', '--', 'maps/EntryMap/script/y3'],
+            ]);
+        });
+
+        test('blocks an existing registered submodule when it has local changes', () => {
+            const plan = planY3LibraryGitManagement({
+                mode: 'existing-submodule',
+                state: {
+                    exists: true,
+                    submoduleStatusLine: ' abc123 maps/EntryMap/script/y3',
+                    statusPorcelain: ' M README.md',
+                },
+                repoUrl: 'https://example.com/y3.git',
+                relativePath: 'maps/EntryMap/script/y3',
+            });
+
+            assert.strictEqual(plan.kind, 'blocked');
+            assert.ok(plan.message.includes('本地改动'));
         });
     });
 

@@ -1,4 +1,5 @@
 import moduleAlias from 'module-alias';
+import * as path from 'path';
 
 moduleAlias.addAliases({
     'y3-helper': __dirname + '/y3-helper'
@@ -29,10 +30,19 @@ import * as mcp from './mcp';
 import { getMcpHub } from './codemaker/mcpHandlers';
 import { registerAgentAccessCenter } from './agentAccessCenter';
 import { canAutoStartMcp, getMcpStartMode } from './mcp/config';
-import { Y3_LUALIB_REPO_URL } from './y3LibrarySource';
+import {
+    makeY3LibraryCloneArgs,
+    resolveY3LibraryRepoUrl,
+    Y3_LUALIB_REPO_URL,
+} from './y3LibrarySource';
+import {
+    isY3LibraryUsable,
+    planProjectConfigCopy,
+    PROJECT_CONFIG_RELATIVE_PATH,
+    resolveY3LibraryState,
+} from './y3ProjectInit';
 import {
     SHARED_WORKSPACE_FILE,
-    classifyY3SubmoduleState,
     createSharedWorkspaceContent,
     execGit,
     getGitRepositoryRoot,
@@ -42,15 +52,13 @@ import {
     makeGitAddDryRunArgs,
     makeGitCommitArgs,
     makeGitInitArgs,
-    makeSubmoduleAbsorbGitDirsArgs,
-    makeSubmoduleAddArgs,
-    makeSubmoduleAddExistingArgs,
-    makeSubmoduleUpdateInitArgs,
     mergeMapGitignore,
+    planY3LibraryGitManagement,
     probeY3Submodule,
     readTextFileIfExists,
     toPosixRelativePath,
     writeTextFile,
+    Y3GitManagementMode,
 } from './mapGitProject';
 
 class Helper {
@@ -105,87 +113,151 @@ class Helper {
                 return;
             }
             running = true;
-            await vscode.window.withProgress({
-                location: vscode.ProgressLocation.Notification,
-                title: l10n.t('正在初始化Y3项目...'),
-            }, async (progress, token) => {
-                await env.mapReady(true);
-                if (!env.scriptUri) {
-                    vscode.window.showErrorMessage(l10n.t('未找到Y3地图路径，请先用编辑器创建地图或重新指定！'));
-                    return;
-                };
-
-                let scriptUri = env.scriptUri!;
-                let y3Uri = env.y3Uri!;
-
-                try {
-                    if ((await vscode.workspace.fs.stat(vscode.Uri.joinPath(y3Uri, '.git'))).type === vscode.FileType.Directory) {
-                        vscode.window.showErrorMessage(l10n.t('此项目已经初始化过了！'));
-                        return;
-                    }
-                } catch {}
-
-                try {
-                    let state = await vscode.workspace.fs.stat(y3Uri);
-                    if (state.type === vscode.FileType.Directory) {
-                        // 直接删除这个目录
-                        try {
-                            await vscode.workspace.fs.delete(y3Uri, {
-                                recursive: true,
-                                useTrash: true,
-                            });
-                            vscode.window.showInformationMessage(l10n.t('已将原有的 {0} 目录移至回收站', y3Uri.fsPath));
-                        } catch (error) {
-                            vscode.window.showErrorMessage(l10n.t('{0} 已被占用，请手动删除它！', y3Uri.fsPath));
-                            return;
-                        }
-                    } else {
-                        vscode.window.showErrorMessage(l10n.t('{0} 已被占用，请手动删除它！', y3Uri.fsPath));
-                        return;
-                    };
-                } catch (error) {
-                    // ignore
-                }
-
-                await runShell(l10n.t("初始化Y3项目"), "git", [
-                    "clone",
-                    Y3_LUALIB_REPO_URL,
-                    y3Uri.fsPath,
-                ]);
-
-                if (!y3.fs.isExists(y3Uri, 'README.md')) {
-                    vscode.window.showWarningMessage(l10n.t('仓库拉取失败！'));
-                    return;
-                }
-
-                // 初始化配置
-                await vscode.workspace.fs.createDirectory(vscode.Uri.joinPath(scriptUri, '.log'));
-                if (env.globalScriptUri) {
-                    await vscode.workspace.fs.createDirectory(vscode.Uri.joinPath(env.globalScriptUri, '.log'));
-                }
-                let copySource = vscode.Uri.joinPath(y3Uri, l10n.t('演示/项目配置'));
-                for await (const entry of await vscode.workspace.fs.readDirectory(copySource)) {
-                    try {
-                        await vscode.workspace.fs.copy(
-                            vscode.Uri.joinPath(copySource, entry[0]),
-                            vscode.Uri.joinPath(scriptUri, entry[0]),
-                            {
-                                overwrite: true,
-                            }
-                        );
-                    } catch {}
-                }
-
-                // 打开项目
-                await this.context.globalState.update("NewProjectPath", scriptUri.fsPath);
-                await vscode.commands.executeCommand('vscode.openFolder', env.projectUri);
-
-                this.checkNewProject();
-
-                mainMenu.init();
-            });
-            running = false;
+            try {
+                await vscode.window.withProgress({
+                    location: vscode.ProgressLocation.Notification,
+                    title: l10n.t('正在初始化Y3项目...'),
+                }, async () => {
+                    await this.initY3LibraryProject();
+                });
+            } finally {
+                running = false;
+            }
         });
+    }
+
+    private async initY3LibraryProject() {
+        await env.mapReady(true);
+        if (!env.scriptUri || !env.y3Uri) {
+            vscode.window.showErrorMessage(l10n.t('未找到Y3地图路径，请先用编辑器创建地图或重新指定！'));
+            return;
+        }
+
+        const scriptUri = env.scriptUri;
+        const y3Uri = env.y3Uri;
+        let state = await resolveY3LibraryState(y3Uri.fsPath);
+
+        if (state.kind === 'invalid') {
+            vscode.window.showErrorMessage(l10n.t('Y3 库目录不可用：{0}。请手动处理后重试。', state.reason));
+            return;
+        }
+
+        if (state.kind === 'missing') {
+            const installed = await this.installY3Library(y3Uri);
+            if (!installed) {
+                return;
+            }
+            state = await resolveY3LibraryState(y3Uri.fsPath);
+            if (state.kind === 'invalid' || state.kind === 'missing') {
+                const reason = state.kind === 'invalid' ? state.reason : l10n.t('未找到 Y3 库目录');
+                vscode.window.showErrorMessage(l10n.t('Y3 库安装后仍不可用：{0}', reason));
+                return;
+            }
+        }
+
+        const configInitialized = await this.initializeY3ProjectConfig(scriptUri, y3Uri);
+        if (!configInitialized) {
+            return;
+        }
+        await this.context.globalState.update("NewProjectPath", scriptUri.fsPath);
+        await vscode.commands.executeCommand('vscode.openFolder', env.projectUri);
+        this.checkNewProject();
+        mainMenu.init();
+    }
+
+    private async installY3Library(y3Uri: vscode.Uri): Promise<boolean> {
+        const useDefault = l10n.t('使用默认仓库');
+        const useCustom = l10n.t('输入自定义仓库');
+        const choice = await vscode.window.showInformationMessage(
+            l10n.t('当前地图脚本目录尚未安装 Y3 库。请选择安装来源。'),
+            { modal: true },
+            useDefault,
+            useCustom,
+        );
+        if (!choice) {
+            return false;
+        }
+
+        const customInput = choice === useCustom
+            ? await vscode.window.showInputBox({
+                prompt: l10n.t('请输入 Y3 库 Git 仓库地址'),
+                placeHolder: Y3_LUALIB_REPO_URL,
+                ignoreFocusOut: true,
+            })
+            : undefined;
+        if (choice === useCustom && customInput === undefined) {
+            return false;
+        }
+
+        const repo = resolveY3LibraryRepoUrl(customInput);
+        if (!repo.ok) {
+            vscode.window.showErrorMessage(repo.message);
+            return false;
+        }
+
+        const exitCode = await runShell(
+            l10n.t("安装Y3库"),
+            "git",
+            makeY3LibraryCloneArgs(repo.url, y3Uri.fsPath),
+        );
+        if (exitCode !== 0) {
+            vscode.window.showWarningMessage(l10n.t('Y3 库仓库拉取失败！'));
+            return false;
+        }
+        return true;
+    }
+
+    private async initializeY3ProjectConfig(scriptUri: vscode.Uri, y3Uri: vscode.Uri): Promise<boolean> {
+        const sourcePath = vscode.Uri.joinPath(y3Uri, ...PROJECT_CONFIG_RELATIVE_PATH.split('/')).fsPath;
+        const plan = await planProjectConfigCopy(sourcePath, scriptUri.fsPath, { overwrite: false });
+        if (plan.conflicts.length > 0) {
+            const overwrite = l10n.t('覆盖已有配置');
+            const skip = l10n.t('保留已有配置');
+            const conflictPreview = plan.conflicts.map(item => item.relativePath).join('\n');
+            const choice = await vscode.window.showWarningMessage(
+                l10n.t('以下配置文件已存在：\n{0}\n是否覆盖？', conflictPreview),
+                { modal: true },
+                skip,
+                overwrite,
+            );
+            if (!choice) {
+                return false;
+            }
+            if (choice === overwrite) {
+                const copied = await this.copyY3ProjectConfig(scriptUri, y3Uri, true);
+                if (!copied) {
+                    return false;
+                }
+                return true;
+            }
+        }
+
+        return this.copyY3ProjectConfig(scriptUri, y3Uri, false);
+    }
+
+    private async copyY3ProjectConfig(scriptUri: vscode.Uri, y3Uri: vscode.Uri, overwrite: boolean): Promise<boolean> {
+        try {
+            await vscode.workspace.fs.createDirectory(vscode.Uri.joinPath(scriptUri, '.log'));
+            if (env.globalScriptUri) {
+                await vscode.workspace.fs.createDirectory(vscode.Uri.joinPath(env.globalScriptUri, '.log'));
+            }
+
+            const sourcePath = vscode.Uri.joinPath(y3Uri, ...PROJECT_CONFIG_RELATIVE_PATH.split('/')).fsPath;
+            const plan = await planProjectConfigCopy(sourcePath, scriptUri.fsPath, { overwrite });
+            for (const item of plan.copyItems) {
+                await vscode.workspace.fs.createDirectory(vscode.Uri.file(path.dirname(item.targetPath)));
+                await vscode.workspace.fs.copy(
+                    vscode.Uri.file(item.sourcePath),
+                    vscode.Uri.file(item.targetPath),
+                    { overwrite },
+                );
+            }
+            return true;
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            vscode.window.showErrorMessage(l10n.t('初始化项目配置失败：{0}', message));
+            return false;
+        }
     }
 
     private registerCommandOfInitMapGitProject() {
@@ -280,8 +352,8 @@ class Helper {
             await writeTextFile(gitignoreUri.fsPath, mergedGitignore);
         }
 
-        const submoduleReady = await this.ensureY3Submodule(projectRoot, y3Path, y3RelativePath);
-        if (!submoduleReady) {
+        const unmanagedY3Paths = await this.configureY3LibraryGitManagement(projectRoot, y3Path, y3RelativePath);
+        if (unmanagedY3Paths === undefined) {
             return;
         }
 
@@ -319,7 +391,7 @@ class Helper {
             await writeTextFile(workspaceUri.fsPath, workspaceText);
         }
 
-        const dryRun = await execGit(makeGitAddDryRunArgs(), projectRoot);
+        const dryRun = await execGit(makeGitAddDryRunArgs(unmanagedY3Paths), projectRoot);
         if (dryRun.exitCode !== 0) {
             vscode.window.showErrorMessage(l10n.t('Git 暂存预览失败：{0}', dryRun.stderr || dryRun.stdout));
             return;
@@ -335,7 +407,7 @@ class Helper {
             return;
         }
 
-        const addResult = await execGit(makeGitAddArgs(), projectRoot);
+        const addResult = await execGit(makeGitAddArgs(unmanagedY3Paths), projectRoot);
         if (addResult.exitCode !== 0) {
             vscode.window.showErrorMessage(l10n.t('Git 暂存失败：{0}', addResult.stderr || addResult.stdout));
             return;
@@ -360,83 +432,108 @@ class Helper {
         mainMenu.refresh();
     }
 
-    private async ensureY3Submodule(projectRoot: string, y3Path: string, y3RelativePath: string): Promise<boolean> {
+    private async configureY3LibraryGitManagement(
+        projectRoot: string,
+        y3Path: string,
+        y3RelativePath: string,
+    ): Promise<string[] | undefined> {
         const probe = await probeY3Submodule(projectRoot, y3Path, y3RelativePath);
-        const state = classifyY3SubmoduleState(probe, Y3_LUALIB_REPO_URL);
-
-        if (state === 'already-submodule') {
-            return true;
+        const selection = await this.chooseY3LibraryGitManagementMode(probe);
+        if (!selection) {
+            return undefined;
         }
 
-        if (state === 'missing') {
-            const ok = l10n.t('添加 Y3 库子模块');
-            const res = await vscode.window.showInformationMessage(
-                l10n.t('将把 Y3 库作为 Git 子模块添加到 {0}', y3RelativePath),
-                { modal: true },
-                ok,
-            );
-            if (res !== ok) {
-                return false;
-            }
-            const result = await execGit(makeSubmoduleAddArgs(Y3_LUALIB_REPO_URL, y3RelativePath), projectRoot, 120_000);
-            if (result.exitCode !== 0) {
-                vscode.window.showErrorMessage(l10n.t('添加 Y3 库子模块失败：{0}', result.stderr || result.stdout));
-                return false;
-            }
-            return true;
+        const plan = planY3LibraryGitManagement({
+            mode: selection.mode,
+            state: probe,
+            repoUrl: selection.repoUrl,
+            relativePath: y3RelativePath,
+        });
+
+        if (plan.kind === 'blocked') {
+            vscode.window.showErrorMessage(plan.message);
+            return undefined;
         }
 
-        if (state === 'submodule-not-initialized') {
-            const ok = l10n.t('初始化子模块');
-            const res = await vscode.window.showInformationMessage(
-                l10n.t('Y3 库子模块尚未初始化，是否执行 git submodule update --init？'),
-                { modal: true },
-                ok,
-            );
-            if (res !== ok) {
-                return false;
+        if (plan.kind === 'run-git') {
+            for (const gitArgs of plan.gitArgs) {
+                const result = await execGit(gitArgs, projectRoot, 120_000);
+                if (result.exitCode !== 0) {
+                    vscode.window.showErrorMessage(l10n.t('配置 Y3 库 Git 管理失败：{0}', result.stderr || result.stdout));
+                    return undefined;
+                }
             }
-            const result = await execGit(makeSubmoduleUpdateInitArgs(y3RelativePath), projectRoot, 120_000);
-            if (result.exitCode !== 0) {
-                vscode.window.showErrorMessage(l10n.t('初始化 Y3 库子模块失败：{0}', result.stderr || result.stdout));
-                return false;
-            }
-            return true;
         }
 
-        if (state === 'plain-git-clean') {
-            const ok = l10n.t('迁移为子模块');
-            const res = await vscode.window.showWarningMessage(
-                l10n.t('检测到 {0} 是干净的独立 Git 仓库。是否注册为当前地图工程的子模块？', y3RelativePath),
-                { modal: true },
-                ok,
-            );
-            if (res !== ok) {
-                return false;
+        if (plan.kind === 'skip' || plan.kind === 'keep-independent-git') {
+            return [y3RelativePath];
+        }
+        return [];
+    }
+
+    private async chooseY3LibraryGitManagementMode(probe: Awaited<ReturnType<typeof probeY3Submodule>>): Promise<{
+        mode: Y3GitManagementMode;
+        repoUrl: string;
+    } | undefined> {
+        const skip = l10n.t('不管理 Y3 库');
+        const trackPlain = l10n.t('作为普通目录纳入工程 Git');
+        const submoduleDefault = l10n.t('作为子模块：默认仓库');
+        const submoduleCustom = l10n.t('作为子模块：自定义仓库');
+        const keepIndependent = l10n.t('保留独立 Git 仓库');
+        const existingSubmodule = l10n.t('继续使用已有子模块');
+
+        const choices: string[] = [skip];
+        if (probe.submoduleStatusLine !== undefined) {
+            choices.push(existingSubmodule);
+        } else {
+            if (probe.exists && probe.isGitWorkTree === false) {
+                choices.push(trackPlain);
             }
-            const addResult = await execGit(makeSubmoduleAddExistingArgs(Y3_LUALIB_REPO_URL, y3RelativePath), projectRoot, 120_000);
-            if (addResult.exitCode !== 0) {
-                vscode.window.showErrorMessage(l10n.t('注册 Y3 库子模块失败：{0}', addResult.stderr || addResult.stdout));
-                return false;
+            choices.push(submoduleDefault, submoduleCustom);
+            if (probe.exists && probe.isGitWorkTree) {
+                choices.push(keepIndependent);
             }
-            const absorbResult = await execGit(makeSubmoduleAbsorbGitDirsArgs(y3RelativePath), projectRoot, 120_000);
-            if (absorbResult.exitCode !== 0) {
-                vscode.window.showErrorMessage(l10n.t('迁移 Y3 库 Git 目录失败：{0}', absorbResult.stderr || absorbResult.stdout));
-                return false;
-            }
-            return true;
         }
 
-        const messageByState: Record<string, string> = {
-            'plain-git-dirty': l10n.t('Y3 库目录存在未提交改动，请先提交或清理后再初始化版本管理。'),
-            'submodule-dirty': l10n.t('Y3 库子模块存在未提交改动，请先提交或清理后再初始化版本管理。'),
-            'remote-mismatch': l10n.t('Y3 库目录的远端仓库不是预期地址，请确认来源后手动处理。'),
-            'not-git': l10n.t('Y3 库目录已存在但不是 Git 工作区，请手动处理后再初始化版本管理。'),
-            'submodule-commit-mismatch': l10n.t('Y3 库子模块指针与工作区提交不一致，请先确认并处理。'),
-            'submodule-conflict': l10n.t('Y3 库子模块存在冲突，请先解决冲突。'),
-        };
-        vscode.window.showErrorMessage(messageByState[state] ?? l10n.t('Y3 库子模块状态未知，请手动检查。'));
-        return false;
+        const choice = await vscode.window.showInformationMessage(
+            l10n.t('请选择地图工程 Git 如何处理 Y3 库。'),
+            { modal: true },
+            ...choices,
+        );
+        if (!choice) {
+            return undefined;
+        }
+
+        if (choice === skip) {
+            return { mode: 'skip', repoUrl: Y3_LUALIB_REPO_URL };
+        }
+        if (choice === trackPlain) {
+            return { mode: 'track-plain-directory', repoUrl: Y3_LUALIB_REPO_URL };
+        }
+        if (choice === keepIndependent) {
+            return { mode: 'keep-independent-git', repoUrl: Y3_LUALIB_REPO_URL };
+        }
+        if (choice === existingSubmodule) {
+            return { mode: 'existing-submodule', repoUrl: Y3_LUALIB_REPO_URL };
+        }
+        if (choice === submoduleCustom) {
+            const input = await vscode.window.showInputBox({
+                prompt: l10n.t('请输入用于 Y3 库子模块的 Git 仓库地址'),
+                placeHolder: Y3_LUALIB_REPO_URL,
+                ignoreFocusOut: true,
+            });
+            if (input === undefined) {
+                return undefined;
+            }
+            const repo = resolveY3LibraryRepoUrl(input);
+            if (!repo.ok) {
+                vscode.window.showErrorMessage(repo.message);
+                return undefined;
+            }
+            return { mode: 'submodule', repoUrl: repo.url };
+        }
+
+        return { mode: 'submodule', repoUrl: Y3_LUALIB_REPO_URL };
     }
 
     private registerCommandOfMakeLuaDoc() {
@@ -580,30 +677,24 @@ class Helper {
         }
     }
 
-    private async hasGitDirectory(y3Uri?: vscode.Uri): Promise<boolean> {
+    private async hasUsableY3Library(y3Uri?: vscode.Uri): Promise<boolean> {
         if (!y3Uri) {
             return false;
         }
-        try {
-            const gitUri = vscode.Uri.joinPath(y3Uri, '.git');
-            const stat = await vscode.workspace.fs.stat(gitUri);
-            return stat.type === vscode.FileType.Directory;
-        } catch {
-            return false;
-        }
+        return isY3LibraryUsable(y3Uri.fsPath);
     }
 
     /**
-     * 检查 Y3 仓库是否已初始化（.git 目录存在）。
-     * 用于 MCP Server 自动启动守卫：未初始化的仓库不应自动启动 MCP。
+     * 检查 Y3 库内容是否可用。
+     * 用于 MCP Server 自动启动守卫：未准备好 Y3 库的地图不应自动启动 MCP。
      * 启用全局脚本后，仓库可能位于 global_script/y3。
      */
     private async isY3Initialized(): Promise<boolean> {
-        if (await this.hasGitDirectory(env.y3Uri)) {
+        if (await this.hasUsableY3Library(env.y3Uri)) {
             return true;
         }
-        return this.hasGitDirectory(
-            env.globalScriptUri ? vscode.Uri.joinPath(env.globalScriptUri, l10n.t('y3')) : undefined
+        return this.hasUsableY3Library(
+            env.globalScriptUri ? vscode.Uri.joinPath(env.globalScriptUri, 'y3') : undefined
         );
     }
 

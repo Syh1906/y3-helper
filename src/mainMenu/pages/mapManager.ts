@@ -55,8 +55,8 @@ export class 地图管理 extends TreeNode {
                 if (y3.env.projectUri) {
                     node.childs.push(new TreeNode(l10n.t('初始化版本管理'), {
                         iconPath: new vscode.ThemeIcon('source-control'),
-                        description: l10n.t('Git + Y3库子模块'),
-                        tooltip: l10n.t('在完整地图工程根目录初始化 Git，并将脚本目录下的 y3 库登记为子模块'),
+                        description: l10n.t('工程 Git / Y3库可选管理'),
+                        tooltip: l10n.t('在完整地图工程根目录初始化 Git，并按需选择 Y3 库管理方式'),
                         command: {
                             command: 'y3-helper.initMapGitProject',
                             title: l10n.t('初始化版本管理'),
