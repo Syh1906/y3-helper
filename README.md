@@ -4,7 +4,7 @@
 
 # Y3开发助手（本地分叉版）
 
-这是 `Syh1906/y3-helper` 的本地 VSIX 分叉版。这个分支不发布到 VSCode 插件市场，只从源码构建 `.vsix` 后安装。扩展身份为 `syh1906.y3-helper-local`，版本线从 `1.0.0` 开始。当前版本暂停 Y3Maker AI 面板、聊天设置和启动链路，保留源码作为后续恢复锚点。
+这是 `Syh1906/y3-helper` 的本地 VSIX 分叉版。这个分支不发布到 VSCode 插件市场，只从源码构建 `.vsix` 后安装。扩展身份为 `syh1906.y3-helper-local`，版本线从 `1.0.0` 开始。当前版本暂停 Y3Maker AI 面板、聊天设置和启动链路，保留源码作为后续恢复锚点，并解耦 Y3 库安装、项目配置初始化和地图工程版本管理。
 
 ## 安装
 
@@ -20,7 +20,7 @@ npm run package:vsix
 生成的安装包位于：
 
 ```text
-dist/vsix/y3-helper-local-1.0.2.vsix
+dist/vsix/y3-helper-local-1.0.3.vsix
 ```
 
 在 VSCode 中按 `Ctrl+Shift+P`，输入 `Extensions: Install from VSIX...`，选择该 `.vsix` 文件安装。
