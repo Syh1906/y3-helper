@@ -1,6 +1,20 @@
 export const MCP_HTTP_PORT = 8766;
 export const MCP_ENDPOINT = `http://127.0.0.1:${MCP_HTTP_PORT}/mcp`;
 export const MCP_HEALTH_ENDPOINT = `http://127.0.0.1:${MCP_HTTP_PORT}/health`;
+const Y3_MCP_CLIENT_SERVERS = {
+    'y3-helper': {
+        type: 'streamableHttp',
+        url: MCP_ENDPOINT,
+    },
+    y3editor: {
+        type: 'streamableHttp',
+        url: 'http://127.0.0.1:8765/mcp',
+    },
+    y3runtime: {
+        type: 'streamableHttp',
+        url: 'http://127.0.0.1:8767/mcp',
+    },
+} as const;
 
 export interface AgentContextSnapshot {
     projectRoot?: string;
@@ -41,12 +55,7 @@ function normalizeDisplayPath(value: string | undefined): string | undefined {
 
 export function createMcpClientConfig(): Record<string, unknown> {
     return {
-        mcpServers: {
-            'y3-helper': {
-                type: 'streamableHttp',
-                url: MCP_ENDPOINT,
-            },
-        },
+        mcpServers: Y3_MCP_CLIENT_SERVERS,
     };
 }
 
@@ -66,10 +75,13 @@ export function createAgentGuide(snapshot: AgentContextSnapshot): string {
         '2. 再调用 `get_game_status` 判断游戏是否已经运行。',
         '3. 需要诊断 Lua 时优先调用 `read_problems_lua`。',
         '4. 需要运行时验证时，再使用 `launch_game`、`execute_lua`、`capture_screenshot`。',
+        '5. 编辑器资源、物编、UI 热更使用 `y3editor`；游戏运行中 UI 自动化和验收使用 `y3runtime`。',
         '',
         '## 当前入口',
         '',
         `- MCP: ${snapshot.mcpEndpoint}`,
+        '- y3editor MCP: http://127.0.0.1:8765/mcp',
+        '- y3runtime MCP: http://127.0.0.1:8767/mcp',
         `- Health: ${snapshot.healthEndpoint}`,
         `- Script: ${formatPath(snapshot.scriptRoot)}`,
     ].join('\n');
@@ -85,7 +97,12 @@ export function createProjectContext(snapshot: AgentContextSnapshot): string {
         currentMapName: snapshot.currentMapName ?? null,
         mcpEndpoint: snapshot.mcpEndpoint,
         healthEndpoint: snapshot.healthEndpoint,
-        workspaceGuidance: '默认把地图 script 目录作为 agent 工作区；script/y3 是 Y3 框架库，不是地图业务脚本根。',
+        mcpServers: {
+            'y3-helper': MCP_ENDPOINT,
+            y3editor: 'http://127.0.0.1:8765/mcp',
+            y3runtime: 'http://127.0.0.1:8767/mcp',
+        },
+        workspaceGuidance: '地图根目录用于模块路由；script 目录用于 Lua 业务开发；script/y3 是 Y3 框架库，默认只读。',
     }, null, 2);
 }
 

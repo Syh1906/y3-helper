@@ -29,6 +29,14 @@ suite('MCP agent context', () => {
                     type: 'streamableHttp',
                     url: 'http://127.0.0.1:8766/mcp',
                 },
+                y3editor: {
+                    type: 'streamableHttp',
+                    url: 'http://127.0.0.1:8765/mcp',
+                },
+                y3runtime: {
+                    type: 'streamableHttp',
+                    url: 'http://127.0.0.1:8767/mcp',
+                },
             },
         });
     });
@@ -44,9 +52,21 @@ suite('MCP agent context', () => {
 
     test('creates resources that teach agents when to use Y3 Helper MCP', () => {
         assert.ok(createAgentGuide(snapshot).includes('先读取 `y3-helper://project-context`'));
+        assert.ok(createAgentGuide(snapshot).includes('y3editor'));
+        assert.ok(createAgentGuide(snapshot).includes('y3runtime'));
         assert.ok(createProjectContext(snapshot).includes('"scriptRoot"'));
+        assert.ok(createProjectContext(snapshot).includes('"y3runtime"'));
         assert.ok(createToolWorkflows(snapshot).includes('read_problems_lua'));
         assert.ok(createAgentSafetyGuide(snapshot).includes('execute_lua'));
+    });
+
+    test('project context treats map root as routing workspace and script as Lua workspace', () => {
+        const context = JSON.parse(createProjectContext(snapshot));
+
+        assert.ok(context.workspaceGuidance.includes('地图根目录'));
+        assert.ok(context.workspaceGuidance.includes('模块路由'));
+        assert.ok(context.workspaceGuidance.includes('script 目录'));
+        assert.strictEqual(context.workspaceGuidance.includes('默认把地图 script 目录作为 agent 工作区'), false);
     });
 
     test('normalizes Windows paths for agent-readable text', () => {

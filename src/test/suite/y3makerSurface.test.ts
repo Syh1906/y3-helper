@@ -60,6 +60,16 @@ suite('Y3Maker paused surface', () => {
         assert.strictEqual(mainMenuSource.includes('Agent接入中心'), true);
     });
 
+    test('keeps Agent access center and AI environment initialization commands exposed', () => {
+        const manifest = readPackageJson();
+        const commands = manifest.contributes?.commands ?? [];
+        const commandIds = commands.map((command: { command?: string }) => command.command);
+
+        assert.ok(commandIds.includes('y3-helper.openAgentAccessCenter'));
+        assert.ok(commandIds.includes('y3-helper.createAgentsMarkdown'));
+        assert.ok(commandIds.includes('y3-helper.initializeAiDevEnvironment'));
+    });
+
     test('keeps recovery anchors for future Y3Maker restoration', () => {
         assert.strictEqual(fs.existsSync(path.join(repoRoot, 'src', 'codemaker')), true);
         assert.strictEqual(fs.existsSync(path.join(repoRoot, 'src', 'y3makerConfig.ts')), true);

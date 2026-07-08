@@ -2,11 +2,19 @@ import * as vscode from 'vscode';
 import * as l10n from '@vscode/l10n';
 import { env } from './env';
 import {
+    applyAiDevEnvironment,
+    inspectAiDevEnvironment,
+    setAiMcpProjectConfigEnabled,
+} from './aiDevEnvironmentApplier';
+import {
+    createScriptAgentsMarkdown,
+} from './aiDevEnvironment';
+import {
     createAgentContextSnapshot,
-    createAgentsMarkdown,
     createMcpClientConfigJson,
 } from './mcp/agentContext';
 import { getMcpStartMode } from './mcp/config';
+import { getMcpHub } from './codemaker/mcpHandlers';
 
 export interface AgentAccessCenterOptions {
     isMcpRunning(): boolean;
@@ -32,6 +40,21 @@ async function ensureScriptUri(): Promise<vscode.Uri | undefined> {
         return undefined;
     }
     return env.scriptUri;
+}
+
+async function ensureProjectAndScriptUri(): Promise<{ projectUri: vscode.Uri; scriptUri: vscode.Uri } | undefined> {
+    const scriptUri = await ensureScriptUri();
+    if (!scriptUri) {
+        return undefined;
+    }
+    if (!env.projectUri) {
+        vscode.window.showErrorMessage(l10n.t('未找到 Y3 地图工程根目录，请先打开地图工程。'));
+        return undefined;
+    }
+    return {
+        projectUri: env.projectUri,
+        scriptUri,
+    };
 }
 
 async function copyMcpConfig(): Promise<void> {
@@ -79,10 +102,116 @@ async function generateAgentsMarkdown(): Promise<void> {
         return;
     }
 
-    const content = createAgentsMarkdown(getAgentSnapshot());
+    const content = createScriptAgentsMarkdown(getAgentSnapshot());
     await vscode.workspace.fs.writeFile(agentsUri, new TextEncoder().encode(content));
     await vscode.commands.executeCommand('vscode.open', agentsUri);
     vscode.window.showInformationMessage(l10n.t('AGENTS.md 已生成到地图脚本目录'));
+}
+
+async function initializeAiDevEnvironment(): Promise<void> {
+    const roots = await ensureProjectAndScriptUri();
+    if (!roots) {
+        return;
+    }
+
+    const skillSourceRoot = await resolveSkillSourceRoot();
+
+    const snapshot = getAgentSnapshot();
+    const input = {
+        ...snapshot,
+        skillSourceRoot,
+        y3MakerConfigRoot: getWorkspaceRootForMcpHub(),
+    };
+    let plan;
+    let conflicts: string[];
+    try {
+        const inspected = await inspectAiDevEnvironment(input);
+        plan = inspected.plan;
+        conflicts = inspected.conflicts;
+    } catch (error) {
+        vscode.window.showErrorMessage(l10n.t('AI 开发环境检查失败：{0}', error instanceof Error ? error.message : String(error)));
+        return;
+    }
+    if (conflicts.length > 0) {
+        const detail = conflicts.map((item) => item.replace(/\\/g, '/')).join('\n');
+        vscode.window.showWarningMessage(l10n.t('AI 开发环境初始化发现用户自定义文件，已停止以避免覆盖：\n{0}', detail), { modal: true });
+        return;
+    }
+
+    const action = l10n.t('初始化 / 修复');
+    const skillNote = skillSourceRoot
+        ? l10n.t('已找到 y3-kernel-navigator skill，本次会同步到 Codex/Claude。')
+        : l10n.t('未找到 y3-kernel-navigator skill，本次会跳过 skill；后续补齐 Y3 库 skill 后可再次运行修复。');
+    const result = await vscode.window.showInformationMessage(
+        l10n.t('将为当前地图工程初始化 / 修复 Codex、Claude、AGENTS.md、skills 和三项 MCP 项目配置。\n{0}\n{1}', roots.projectUri.fsPath, skillNote),
+        { modal: true },
+        action,
+    );
+    if (result !== action) {
+        return;
+    }
+
+    try {
+        const applied = await applyAiDevEnvironment(input);
+        const message = applied.skillStatus === 'synced'
+            ? l10n.t('AI 开发环境已初始化 / 修复完成，skill 已同步。')
+            : l10n.t('AI 开发环境已初始化 / 修复完成，未找到 y3-kernel-navigator skill，已跳过 skill 分项。');
+        await getMcpHub()?.restartAllConnections();
+        vscode.window.showInformationMessage(message);
+    } catch (error) {
+        vscode.window.showErrorMessage(l10n.t('AI 开发环境初始化失败：{0}', error instanceof Error ? error.message : String(error)));
+        return;
+    }
+
+    await vscode.commands.executeCommand('vscode.open', vscode.Uri.file(plan.rootAgentsPath));
+}
+
+async function setAiMcpConfigEnabled(enabled: boolean): Promise<void> {
+    const roots = await ensureProjectAndScriptUri();
+    if (!roots) {
+        return;
+    }
+
+    const action = enabled ? l10n.t('启用') : l10n.t('禁用');
+    const result = await vscode.window.showInformationMessage(
+        l10n.t('{0} Codex / Claude / Y3-Helper 项目级三项 MCP 配置？\n{1}', action, roots.projectUri.fsPath),
+        { modal: true },
+        action,
+    );
+    if (result !== action) {
+        return;
+    }
+
+    try {
+        await setAiMcpProjectConfigEnabled({
+            ...getAgentSnapshot(),
+            skillSourceRoot: roots.projectUri.fsPath,
+            y3MakerConfigRoot: getWorkspaceRootForMcpHub(),
+        }, enabled);
+        await getMcpHub()?.restartAllConnections();
+    } catch (error) {
+        vscode.window.showErrorMessage(l10n.t('AI MCP 项目配置更新失败：{0}', error instanceof Error ? error.message : String(error)));
+        return;
+    }
+    vscode.window.showInformationMessage(enabled ? l10n.t('AI MCP 项目配置已启用') : l10n.t('AI MCP 项目配置已禁用'));
+}
+
+function getWorkspaceRootForMcpHub(): string | undefined {
+    return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+}
+
+async function resolveSkillSourceRoot(): Promise<string | undefined> {
+    const y3Uri = env.y3Uri;
+    if (!y3Uri) {
+        return undefined;
+    }
+    const skillUri = vscode.Uri.joinPath(y3Uri, '.codex', 'skills', 'y3-kernel-navigator');
+    try {
+        const stat = await vscode.workspace.fs.stat(skillUri);
+        return stat.type === vscode.FileType.Directory ? skillUri.fsPath : undefined;
+    } catch {
+        return undefined;
+    }
 }
 
 export function registerAgentAccessCenter(options: AgentAccessCenterOptions): vscode.Disposable[] {
@@ -102,7 +231,19 @@ export function registerAgentAccessCenter(options: AgentAccessCenterOptions): vs
             },
             {
                 label: l10n.t('$(copy) 复制 MCP 客户端配置'),
-                description: 'http://127.0.0.1:8766/mcp',
+                description: l10n.t('y3-helper / y3editor / y3runtime'),
+            },
+            {
+                label: l10n.t('$(sparkle) 初始化 / 修复 AI 开发环境'),
+                description: l10n.t('生成 Codex/Claude 规则、skills 和 MCP 项目配置'),
+            },
+            {
+                label: l10n.t('$(check) 启用 AI MCP 项目配置'),
+                description: l10n.t('写入或启用 Codex/Claude/Y3-Helper 的三 MCP 配置'),
+            },
+            {
+                label: l10n.t('$(circle-slash) 禁用 AI MCP 项目配置'),
+                description: l10n.t('保留配置文件，但禁用三项项目 MCP'),
             },
             {
                 label: l10n.t('$(file-add) 生成 AGENTS.md'),
@@ -134,6 +275,18 @@ export function registerAgentAccessCenter(options: AgentAccessCenterOptions): vs
             await copyMcpConfig();
             return;
         }
+        if (picked.label.includes(l10n.t('初始化 / 修复 AI 开发环境'))) {
+            await initializeAiDevEnvironment();
+            return;
+        }
+        if (picked.label.includes(l10n.t('启用 AI MCP 项目配置'))) {
+            await setAiMcpConfigEnabled(true);
+            return;
+        }
+        if (picked.label.includes(l10n.t('禁用 AI MCP 项目配置'))) {
+            await setAiMcpConfigEnabled(false);
+            return;
+        }
         if (picked.label.includes(l10n.t('生成 AGENTS.md'))) {
             await generateAgentsMarkdown();
             return;
@@ -156,5 +309,6 @@ export function registerAgentAccessCenter(options: AgentAccessCenterOptions): vs
     });
 
     const createAgentsCommand = vscode.commands.registerCommand('y3-helper.createAgentsMarkdown', generateAgentsMarkdown);
-    return [openCommand, createAgentsCommand];
+    const initializeAiDevEnvironmentCommand = vscode.commands.registerCommand('y3-helper.initializeAiDevEnvironment', initializeAiDevEnvironment);
+    return [openCommand, createAgentsCommand, initializeAiDevEnvironmentCommand];
 }

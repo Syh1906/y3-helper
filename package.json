@@ -379,6 +379,11 @@
                 "command": "y3-helper.createAgentsMarkdown",
                 "title": "%生成 Agent 指南%",
                 "category": "%Y3开发助手%"
+            },
+            {
+                "command": "y3-helper.initializeAiDevEnvironment",
+                "title": "初始化 / 修复 AI 开发环境",
+                "category": "%Y3开发助手%"
             }
         ],
         "configuration": {
