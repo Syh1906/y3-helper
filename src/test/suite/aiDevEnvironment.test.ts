@@ -40,9 +40,13 @@ suite('AI development environment', () => {
 
         assert.ok(markdown.includes(AI_DEV_ENV_MARKER));
         assert.ok(markdown.includes('地图工程模块路由'));
+        assert.ok(markdown.includes('常见任务入口'));
         assert.ok(markdown.includes('maps/EntryMap/script'));
+        assert.ok(markdown.includes('main.lua'));
         assert.ok(markdown.includes('script/y3'));
         assert.ok(markdown.includes('默认只读'));
+        assert.ok(markdown.includes('.y3maker'));
+        assert.ok(markdown.includes('.log'));
         assert.strictEqual(markdown.includes('必须进入 script'), false);
     });
 
@@ -61,9 +65,35 @@ suite('AI development environment', () => {
         const markdown = createScriptAgentsMarkdown(snapshot);
 
         assert.ok(markdown.includes('Lua 业务开发'));
+        assert.ok(markdown.includes('maps/EntryMap/script'));
+        assert.ok(markdown.includes('地图工程根目录'));
+        assert.ok(markdown.includes('main.lua'));
+        assert.ok(markdown.includes('可重载的代码.lua'));
+        assert.ok(markdown.includes('y3-helper/meta'));
+        assert.ok(markdown.includes('.vscode'));
+        assert.ok(markdown.includes('.y3maker'));
+        assert.ok(markdown.includes('.log'));
+        assert.ok(markdown.includes('log/'));
         assert.ok(markdown.includes('y3-kernel-navigator'));
         assert.ok(markdown.includes('read_problems_lua'));
         assert.ok(markdown.includes('execute_lua'));
+        assert.strictEqual(markdown.includes('E:/Maps/Y3_Helper_test01'), false);
+    });
+
+    test('keeps generated AGENTS markdown free of machine absolute paths', () => {
+        const localSnapshot = {
+            ...snapshot,
+            projectRoot: 'E:/Program Files (x86)/kkduizhan/Games/y3/2.0/game/LocalData/Y3_Helper_test01',
+            scriptRoot: 'E:/Program Files (x86)/kkduizhan/Games/y3/2.0/game/LocalData/Y3_Helper_test01/maps/EntryMap/script',
+        };
+        const markdown = [
+            createRootAgentsMarkdown(localSnapshot),
+            createScriptAgentsMarkdown(localSnapshot),
+        ].join('\n');
+
+        assert.ok(markdown.includes('maps/EntryMap/script'));
+        assert.strictEqual(markdown.includes('E:/'), false);
+        assert.strictEqual(markdown.includes('Program Files'), false);
     });
 
     test('builds default plan paths for Codex and Claude', () => {
@@ -316,11 +346,35 @@ suite('AI development environment', () => {
             const result = await applyAiDevEnvironment(input);
 
             assert.strictEqual(result.skillStatus, 'skipped');
+            assert.ok((await fs.readFile(path.join(root, '.gitignore'), 'utf8')).includes('/.claude/settings.local.json'));
             assert.ok((await fs.readFile(plan.rootAgentsPath, 'utf8')).includes(AI_DEV_ENV_MARKER));
             assert.ok((await fs.readFile(plan.scriptAgentsPath, 'utf8')).includes(AI_DEV_ENV_MARKER));
             assert.ok((await fs.readFile(plan.codexConfigPath, 'utf8')).includes('[mcp_servers.y3runtime]'));
             assert.ok((await fs.readFile(plan.y3MakerMcpSettingsPath, 'utf8')).includes('y3editor'));
             await assert.rejects(() => fs.stat(plan.codexSkillTarget), { code: 'ENOENT' });
+        } finally {
+            await fs.rm(root, { recursive: true, force: true });
+        }
+    });
+
+    test('keeps Claude local settings out of Git while preserving existing ignore rules', async () => {
+        const root = await fs.mkdtemp(path.join(os.tmpdir(), 'y3-helper-ai-gitignore-'));
+        try {
+            const scriptRoot = path.join(root, 'maps', 'EntryMap', 'script');
+            const input = {
+                projectRoot: root,
+                scriptRoot,
+                currentMapName: 'EntryMap',
+            };
+            await fs.writeFile(path.join(root, '.gitignore'), '# existing\n*.log\n', 'utf8');
+
+            await applyAiDevEnvironment(input);
+            await setAiMcpProjectConfigEnabled(input, false);
+
+            const gitignore = await fs.readFile(path.join(root, '.gitignore'), 'utf8');
+            assert.ok(gitignore.includes('# existing'));
+            assert.ok(gitignore.includes('*.log'));
+            assert.strictEqual((gitignore.match(/\/\.claude\/settings\.local\.json/g) ?? []).length, 1);
         } finally {
             await fs.rm(root, { recursive: true, force: true });
         }

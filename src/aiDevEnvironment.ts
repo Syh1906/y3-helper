@@ -2,6 +2,7 @@ import * as path from 'path';
 import { MCP_ENDPOINT } from './mcp/agentContext';
 
 export const AI_DEV_ENV_MARKER = '<!-- Y3_HELPER_AI_DEV_ENV -->';
+export const CLAUDE_LOCAL_SETTINGS_GITIGNORE_RULE = '/.claude/settings.local.json';
 const Y3_MCP_SERVERS = [
     {
         name: 'y3-helper',
@@ -46,6 +47,7 @@ export interface AiDevEnvironmentPlan {
     codexConfigPath: string;
     claudeMcpPath: string;
     claudeSettingsPath: string;
+    gitignorePath: string;
     y3MakerMcpSettingsPath: string;
 }
 
@@ -66,6 +68,15 @@ export function createRootAgentsMarkdown(snapshot: AiDevEnvironmentSnapshot): st
         '- UI 目录：界面布局、控件、画布和 UI 绑定需求进入对应 UI 模块。',
         '- `global_script`：全局脚本需求才进入。',
         '- 工程配置、`header.project`、地图 JSON：只有明确工程配置需求才修改。',
+        '- `.codex` / `.claude` / `.mcp.json` / `.y3maker`：AI 与 MCP 配置，只有明确配置修复需求才修改。',
+        '- `.log` / `log/`：运行日志，只读排查，不作为业务代码入口。',
+        '',
+        '## 常见任务入口',
+        '',
+        `- 普通玩法、事件、初始化逻辑：进入 \`${scriptRoute}\`，优先从 \`main.lua\` 追踪加载链路。`,
+        '- 单位、技能、物品、投射物：优先看 `editor_table` 或使用 `y3editor` MCP。',
+        '- 运行验收、截图、游戏状态：优先使用 `y3-helper` / `y3runtime` MCP。',
+        '- AI/MCP 配置修复：再处理 `.codex`、`.claude`、`.mcp.json`、`.y3maker`。',
         '',
         '## 本地能力',
         '',
@@ -77,6 +88,8 @@ export function createRootAgentsMarkdown(snapshot: AiDevEnvironmentSnapshot): st
 }
 
 export function createScriptAgentsMarkdown(snapshot: AiDevEnvironmentSnapshot): string {
+    const scriptRoute = toProjectRelativePath(snapshot.projectRoot, snapshot.scriptRoot) ?? 'maps/<当前地图>/script';
+
     return [
         '# Y3 地图脚本 Agent 指南',
         '',
@@ -84,11 +97,18 @@ export function createScriptAgentsMarkdown(snapshot: AiDevEnvironmentSnapshot): 
         '',
         '## Lua 业务开发',
         '',
-        `- 地图脚本目录：${formatPath(snapshot.scriptRoot)}`,
+        '- 地图工程根目录：当前地图工程根目录（包含 `header.project`）。',
+        `- 地图脚本目录：\`${scriptRoute}\`（相对地图工程根目录；若工作区直接打开 script，则为当前目录）。`,
         `- 当前地图：${snapshot.currentMapName ?? '(未识别)'}`,
-        `- 地图工程：${formatPath(snapshot.projectRoot)}`,
         '',
-        '`script/y3` 是 Y3 框架库，不是地图业务脚本根；不要把业务代码写入 `script/y3`。',
+        '## 脚本入口与只读边界',
+        '',
+        '- `main.lua`：地图自动运行入口；初始化、事件注册、业务加载链路先从这里追踪。',
+        '- `可重载的代码.lua`：热重载或调试迭代相关需求才进入。',
+        '- `y3/`：Y3 框架库，默认只读；不要把业务代码写入 `script/y3`。',
+        '- `y3-helper/meta/`：生成层和元数据，默认不手改。',
+        '- `.vscode/` / `.y3maker/`：工具配置，只有明确配置修复需求才修改。',
+        '- `.log/` / `log/`：运行日志，只读排查，不作为业务代码入口。',
         '',
         '## Skill',
         '',
@@ -121,8 +141,19 @@ export function buildAiDevEnvironmentPlan(input: AiDevEnvironmentPlanInput): AiD
         codexConfigPath: joinPath(projectRoot, '.codex', 'config.toml'),
         claudeMcpPath: joinPath(projectRoot, '.mcp.json'),
         claudeSettingsPath: joinPath(projectRoot, '.claude', 'settings.local.json'),
+        gitignorePath: joinPath(projectRoot, '.gitignore'),
         y3MakerMcpSettingsPath: joinPath(y3MakerConfigRoot, '.y3maker', 'mcp_settings.json'),
     };
+}
+
+export function mergeAiDevEnvironmentGitignore(existingContent: string): string {
+    const normalized = existingContent.replace(/\r\n/g, '\n');
+    const lines = normalized.split('\n');
+    if (lines.includes(CLAUDE_LOCAL_SETTINGS_GITIGNORE_RULE)) {
+        return normalized.endsWith('\n') ? normalized : `${normalized}\n`;
+    }
+    const trimmed = normalized.trimEnd();
+    return `${trimmed ? `${trimmed}\n` : ''}\n# Claude local settings\n${CLAUDE_LOCAL_SETTINGS_GITIGNORE_RULE}\n`;
 }
 
 export function createCodexConfigToml(existingContent: string, enabled: boolean): string {
@@ -295,10 +326,6 @@ function createCodexServerBlockPattern(serverName: string): RegExp {
 
 function escapeRegExp(value: string): string {
     return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function formatPath(value: string | undefined): string {
-    return value ? normalizePath(value) : '(未识别)';
 }
 
 function normalizePath(value: string): string {

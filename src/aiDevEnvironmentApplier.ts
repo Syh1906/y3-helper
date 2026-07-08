@@ -13,6 +13,7 @@ import {
     hasCodexY3HelperMcpConflict,
     hasY3MakerMcpSettingsConflict,
     isManagedAiDevEnvironmentFile,
+    mergeAiDevEnvironmentGitignore,
     normalizeRelativeLink,
     type AiDevEnvironmentPlan,
     type AiDevEnvironmentPlanInput,
@@ -50,6 +51,7 @@ export async function applyAiDevEnvironment(input: AiDevEnvironmentApplyInput): 
     await writeManagedFile(plan.scriptAgentsPath, createScriptAgentsMarkdown(snapshot));
     await createRelativeSymlink(plan.rootClaudePath, plan.rootAgentsPath, 'file');
     await createRelativeSymlink(plan.scriptClaudePath, plan.scriptAgentsPath, 'file');
+    await writeText(plan.gitignorePath, mergeAiDevEnvironmentGitignore(await readTextIfExists(plan.gitignorePath) ?? ''));
     await writeText(plan.codexConfigPath, createCodexConfigToml(await readTextIfExists(plan.codexConfigPath) ?? '', true));
     await writeText(plan.claudeMcpPath, createClaudeMcpJson(await readTextIfExists(plan.claudeMcpPath) ?? '', true));
     await writeText(plan.claudeSettingsPath, createClaudeSettingsJson(await readTextIfExists(plan.claudeSettingsPath) ?? '', true));
@@ -73,6 +75,7 @@ export async function setAiMcpProjectConfigEnabled(input: AiDevEnvironmentApplyI
     if (conflicts.length > 0) {
         throw new Error(l10n.t('存在同名但地址不同的 y3-helper MCP 配置，已停止以避免覆盖。'));
     }
+    await writeText(plan.gitignorePath, mergeAiDevEnvironmentGitignore(await readTextIfExists(plan.gitignorePath) ?? ''));
     await writeText(plan.codexConfigPath, createCodexConfigToml(await readTextIfExists(plan.codexConfigPath) ?? '', enabled));
     await writeText(plan.claudeMcpPath, createClaudeMcpJson(await readTextIfExists(plan.claudeMcpPath) ?? '', enabled));
     await writeText(plan.claudeSettingsPath, createClaudeSettingsJson(await readTextIfExists(plan.claudeSettingsPath) ?? '', enabled));

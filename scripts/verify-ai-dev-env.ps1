@@ -30,10 +30,20 @@ try {
     }
     New-Item -ItemType Directory -Path $ValidationRoot | Out-Null
 
-    foreach ($mapRoot in $MapRoots) {
-        $name = Split-Path -Leaf $mapRoot
-        $target = Join-Path $ValidationRoot $name
-        Copy-Item -LiteralPath $mapRoot -Destination $target -Recurse -Force
+    $copyScript = @'
+const fs = require("fs");
+const path = require("path");
+
+const validationRoot = process.argv[2];
+const mapRoots = process.argv.slice(3);
+for (const mapRoot of mapRoots) {
+  const target = path.join(validationRoot, path.basename(mapRoot));
+  fs.cpSync(mapRoot, target, { recursive: true, force: true, verbatimSymlinks: true });
+}
+'@
+    $copyScript | node - $ValidationRoot $MapRoots
+    if ($LASTEXITCODE -ne 0) {
+        throw "copying map validation fixtures failed with exit code $LASTEXITCODE"
     }
 
     Push-Location $RepoRoot
@@ -98,8 +108,22 @@ for (const mapName of mapNames) {
   if (!createRootAgentsMarkdown({ projectRoot, scriptRoot, currentMapName: "EntryMap" }).includes(AI_DEV_ENV_MARKER)) {
     throw new Error(`root AGENTS marker missing for ${mapName}`);
   }
-  if (!createScriptAgentsMarkdown({ projectRoot, scriptRoot, currentMapName: "EntryMap" }).includes("y3-kernel-navigator")) {
+  const generatedAgentsMarkdown = [
+    createRootAgentsMarkdown({ projectRoot, scriptRoot, currentMapName: "EntryMap" }),
+    createScriptAgentsMarkdown({ projectRoot, scriptRoot, currentMapName: "EntryMap" }),
+  ].join("\n");
+  if (!generatedAgentsMarkdown.includes("y3-kernel-navigator")) {
     throw new Error(`script AGENTS skill missing for ${mapName}`);
+  }
+  for (const expectedToken of ["\u5e38\u89c1\u4efb\u52a1\u5165\u53e3", "main.lua", "\u53ef\u91cd\u8f7d\u7684\u4ee3\u7801.lua", "y3-helper/meta", ".vscode", ".y3maker", ".log", "log/"]) {
+    if (!generatedAgentsMarkdown.includes(expectedToken)) {
+      throw new Error(`generated AGENTS navigation token missing for ${mapName}: ${expectedToken}`);
+    }
+  }
+  for (const forbiddenToken of [projectRoot, scriptRoot, "E:/Program Files", "LocalData/Y3_Helper"]) {
+    if (generatedAgentsMarkdown.includes(forbiddenToken)) {
+      throw new Error(`generated AGENTS leaked machine path token for ${mapName}: ${forbiddenToken}`);
+    }
   }
   const generatedCodexConfig = createCodexConfigToml("", true);
   const generatedClaudeConfig = createClaudeMcpJson("", true);
@@ -115,6 +139,7 @@ for (const mapName of mapNames) {
       throw new Error(`missing Y3-Helper McpHub server: ${serverName}`);
     }
   }
+  const skillTargetExistedBeforeSkip = fs.existsSync(`${plan.codexSkillTarget}/SKILL.md`);
   const skippedPlan = await applyAiDevEnvironment({
     projectRoot,
     scriptRoot,
@@ -124,7 +149,7 @@ for (const mapName of mapNames) {
   if (skippedPlan.skillStatus !== "skipped") {
     throw new Error(`expected missing skill to be skipped for ${mapName}`);
   }
-  if (fs.existsSync(`${plan.codexSkillTarget}/SKILL.md`)) {
+  if (!skillTargetExistedBeforeSkip && fs.existsSync(`${plan.codexSkillTarget}/SKILL.md`)) {
     throw new Error(`missing skill source should not create skill target: ${plan.codexSkillTarget}`);
   }
   fs.writeFileSync(plan.claudeMcpPath, "{ bad json", "utf8");
@@ -153,6 +178,7 @@ for (const mapName of mapNames) {
     throw new Error(`expected existing skill to be synced for ${mapName}`);
   }
   const expectedFiles = [
+    plan.gitignorePath,
     plan.rootAgentsPath,
     plan.rootClaudePath,
     plan.scriptAgentsPath,
@@ -186,6 +212,14 @@ for (const mapName of mapNames) {
     if (!fs.readFileSync(plan.y3MakerMcpSettingsPath, "utf8").includes(serverName)) {
       throw new Error(`Y3-Helper McpHub server missing after apply: ${serverName}`);
     }
+  }
+  const gitignore = fs.readFileSync(plan.gitignorePath, "utf8");
+  if (!gitignore.includes("/.claude/settings.local.json")) {
+    throw new Error(`Claude local settings rule missing from .gitignore: ${plan.gitignorePath}`);
+  }
+  const gitignoreMatches = gitignore.match(/\/\.claude\/settings\.local\.json/g) || [];
+  if (gitignoreMatches.length !== 1) {
+    throw new Error(`Claude local settings rule duplicated in .gitignore: ${plan.gitignorePath}`);
   }
   await setAiMcpProjectConfigEnabled({
     projectRoot,
