@@ -6,6 +6,26 @@
 
 ## [Unreleased]
 
+## [1.0.4] - 2026-07-08
+
+### 新增
+
+- 增加“初始化 / 修复 AI 开发环境”入口，为地图工程生成 Codex/Claude 规则文件、同步 `y3-kernel-navigator` skill，并写入项目级 MCP 配置。
+- 恢复 `y3-helper`、`y3editor`、`y3runtime` 三项 MCP 工具配置，供 Codex、Claude 和 Y3-Helper `McpHub` 使用。
+
+### 变更
+
+- 根目录 `AGENTS.md` 改为地图工程模块路由说明，`script/AGENTS.md` 保持 Lua 业务开发指引。
+- `y3-kernel-navigator` 缺失时 AI 初始化继续完成 AGENTS 和 MCP 配置，后续补齐 skill 后可再次运行修复。
+- `.y3maker/mcp_settings.json` 仅作为 MCP 连接配置使用，不恢复 Y3Maker 聊天入口或 CodeMaker 面板。
+
+### 修复
+
+- 修复已运行 `McpHub` 在 AI MCP 配置写入后不立即刷新连接的问题。
+- 修复打开 `script` 目录时 `.y3maker` 写入位置与 `McpHub` 读取位置不一致的问题。
+- 修复损坏的 MCP JSON 配置可能导致初始化异常中断的问题。
+- 修复 Codex MCP TOML 使用带引号表名时可能追加重复配置的问题。
+
 ## [1.0.3] - 2026-07-08
 
 ### 新增

@@ -30,7 +30,7 @@ const lock = JSON.parse(read('package-lock.json'));
 assert(pkg.name === 'y3-helper-local', 'package.json name must be y3-helper-local');
 assert(pkg.displayName === 'Y3开发助手（本地分叉版）', 'package.json displayName must identify the local fork');
 assert(pkg.publisher === 'syh1906', 'package.json publisher must be syh1906');
-assert(pkg.version === '1.0.0', 'package.json version must be 1.0.0');
+assert(/^1\.0\.\d+$/.test(pkg.version), 'package.json version must stay on the 1.0.x local fork line');
 assert(pkg.repository && pkg.repository.url === 'https://github.com/Syh1906/y3-helper', 'repository.url must point to Syh1906/y3-helper');
 assert(pkg.scripts && pkg.scripts['package:vsix'], 'package:vsix script must exist');
 assert(pkg.scripts['package:vsix'].includes('scripts/package-vsix.js'), 'package:vsix must use scripts/package-vsix.js');
