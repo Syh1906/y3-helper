@@ -7,7 +7,7 @@ import {
 } from '../../y3LibrarySource';
 
 suite('Y3 library source', () => {
-    test('uses the local VSIX branch fork for project initialization', () => {
+    test('uses the Xiaowei edition Y3 library fork for project initialization', () => {
         assert.strictEqual(Y3_LUALIB_REPO_URL, 'https://github.com/Syh1906/y3-lualib.git');
         assert.strictEqual(DEFAULT_Y3_LUALIB_REPO_URL, 'https://github.com/Syh1906/y3-lualib.git');
     });

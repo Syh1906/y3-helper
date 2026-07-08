@@ -6,7 +6,7 @@
 
 | 文件 | 内容简介 |
 |------|----------|
-| [01-项目架构总览.md](./01-项目架构总览.md) | 项目整体结构、本地 VSIX 分叉定位、目录说明 |
+| [01-项目架构总览.md](./01-项目架构总览.md) | 项目整体结构、小为版定位、目录说明 |
 | [02-编译与打包.md](./02-编译与打包.md) | 本地编译方式、Webpack 打包流程、打包为 .vsix 安装包 |
 | [03-发布流程（GitHub）.md](./03-发布流程（GitHub）.md) | 本地 VSIX 构建、安装与 GitHub Actions 构建检查流程 |
 | [04-启动流程详解.md](./04-启动流程详解.md) | 扩展激活入口、环境初始化、各子模块的启动顺序 |
@@ -14,9 +14,9 @@
 | [06-功能流程详解.md](./06-功能流程详解.md) | 启动游戏、调试附加、初始化项目、Excel导表、插件系统等关键功能的完整流程 |
 | [07-工具层与基础设施.md](./07-工具层与基础设施.md) | tools、utility、console 通信等基础工具层的说明 |
 
-## 本地 VSIX 分支说明
+## 小为版说明
 
-当前分支用于本地打包 VSIX，不走 VSCode 插件市场发布流程。扩展身份是 `syh1906.y3-helper-local`，版本线从 `1.0.0` 开始。初始化 Y3 库时只拉取 `https://github.com/Syh1906/y3-lualib.git`。
+当前分支用于构建小为版 VSIX，不走 VSCode 插件市场发布流程。扩展身份是 `syh1906.y3-helper-xiaowei`，版本线从 `1.0.0` 开始。初始化 Y3 库时只拉取 `https://github.com/Syh1906/y3-lualib.git`。
 
 当前同时暂停两条 Y3Maker 相关链路：一是 `y3-maker-config` 的自动 clone、迁移、更新流程；二是 Y3Maker AI 面板、聊天设置、主菜单入口和启动时的 CodeMaker 初始化。后续如需恢复，先查看 `src/codemaker/`、`src/y3makerConfig.ts`、`src/mainMenu/pages/codemaker.ts`、`src/mainMenu/pages/y3makerConfigUpdate.ts`，以及本次变更前的 `package.json` 与 `src/extension.ts` 调用链。
 

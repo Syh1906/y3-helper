@@ -2,9 +2,9 @@
 
 [README-EN.md](./README-EN.md)
 
-# Y3开发助手（本地分叉版）
+# Y3开发助手（小为版）
 
-这是 `Syh1906/y3-helper` 的本地 VSIX 分叉版。这个分支不发布到 VSCode 插件市场，只从源码构建 `.vsix` 后安装。扩展身份为 `syh1906.y3-helper-local`，版本线从 `1.0.0` 开始。当前版本暂停 Y3Maker AI 面板、聊天设置和启动链路，保留源码作为后续恢复锚点，并解耦 Y3 库安装、项目配置初始化和地图工程版本管理。
+这是 `Syh1906/y3-helper` 的小为版。这个分支不发布到 VSCode 插件市场，只从源码构建 `.vsix` 后安装。扩展身份为 `syh1906.y3-helper-xiaowei`，版本线从 `1.0.0` 开始。当前版本暂停 Y3Maker AI 面板、聊天设置和启动链路，保留源码作为后续恢复锚点，并解耦 Y3 库安装、项目配置初始化和地图工程版本管理。
 
 ## 安装
 
@@ -20,7 +20,7 @@ npm run package:vsix
 生成的安装包位于：
 
 ```text
-dist/vsix/y3-helper-local-1.0.5.vsix
+dist/vsix/y3-helper-xiaowei-1.0.6.vsix
 ```
 
 在 VSCode 中按 `Ctrl+Shift+P`，输入 `Extensions: Install from VSIX...`，选择该 `.vsix` 文件安装。
@@ -90,7 +90,7 @@ dist/vsix/y3-helper-local-1.0.5.vsix
 
 MCP 是 Model Context Protocol 的缩写。这里的 MCP Server 是扩展内置的本地 HTTP 服务，用于让支持 MCP 的 AI 工具连接 Y3-Helper，进而启动游戏、读取状态、执行 Lua、读取日志和获取 UI 数据。
 
-当前本地分叉版保留 MCP 能力，它不依赖已暂停的 Y3Maker 面板。扩展不提供独立的 `mcp-server.js` 文件；MCP 服务由 VSCode 扩展进程启动，地址为：
+当前小为版保留 MCP 能力，它不依赖已暂停的 Y3Maker 面板。扩展不提供独立的 `mcp-server.js` 文件；MCP 服务由 VSCode 扩展进程启动，地址为：
 
 ```text
 http://127.0.0.1:8766/mcp
@@ -98,7 +98,7 @@ http://127.0.0.1:8766/mcp
 
 使用步骤：
 
-1. 安装并启用 `syh1906.y3-helper-local` 扩展
+1. 安装并启用 `syh1906.y3-helper-xiaowei` 扩展
 2. 打开已初始化的 Y3 地图工程
 3. 在侧边栏“Y3开发助手”中点击 `MCP Server/启动 MCP Server`
 4. 用支持 Streamable HTTP MCP 的客户端连接 `http://127.0.0.1:8766/mcp`

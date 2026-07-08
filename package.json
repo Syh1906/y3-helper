@@ -1,9 +1,9 @@
 {
-    "name": "y3-helper-local",
-    "displayName": "Y3开发助手（本地分叉版）",
+    "name": "y3-helper-xiaowei",
+    "displayName": "Y3开发助手（小为版）",
     "description": "",
     "publisher": "syh1906",
-    "version": "1.0.5",
+    "version": "1.0.6",
     "repository": {
         "url": "https://github.com/Syh1906/y3-helper"
     },

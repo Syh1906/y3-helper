@@ -27,10 +27,10 @@ function assertNotContains(file, needles) {
 const pkg = JSON.parse(read('package.json'));
 const lock = JSON.parse(read('package-lock.json'));
 
-assert(pkg.name === 'y3-helper-local', 'package.json name must be y3-helper-local');
-assert(pkg.displayName === 'Y3开发助手（本地分叉版）', 'package.json displayName must identify the local fork');
+assert(pkg.name === 'y3-helper-xiaowei', 'package.json name must be y3-helper-xiaowei');
+assert(pkg.displayName === 'Y3开发助手（小为版）', 'package.json displayName must identify the Xiaowei edition');
 assert(pkg.publisher === 'syh1906', 'package.json publisher must be syh1906');
-assert(/^1\.0\.\d+$/.test(pkg.version), 'package.json version must stay on the 1.0.x local fork line');
+assert(/^1\.0\.\d+$/.test(pkg.version), 'package.json version must stay on the 1.0.x Xiaowei edition line');
 assert(pkg.repository && pkg.repository.url === 'https://github.com/Syh1906/y3-helper', 'repository.url must point to Syh1906/y3-helper');
 assert(pkg.scripts && pkg.scripts['package:vsix'], 'package:vsix script must exist');
 assert(pkg.scripts['package:vsix'].includes('scripts/package-vsix.js'), 'package:vsix must use scripts/package-vsix.js');
@@ -46,8 +46,8 @@ assert(lock.packages[''].version === pkg.version, 'package-lock packages root ve
 assert(!exists('.github/workflows/publish.yml'), 'publish.yml must be removed');
 assert(!exists('.github/workflows/mirror.yml'), 'mirror.yml must be removed');
 assert(read('.vscodeignore').includes('.codemaker/'), '.vscodeignore must exclude internal .codemaker workspace files from VSIX');
-assert(read('.github/workflows/build.yml').includes('node scripts/verify-local-vsix-fork.js'), 'build workflow must run the local fork verifier');
-assert(read('.github/workflows/build.yml').includes('npm run package:vsix'), 'build workflow must reuse the local VSIX packaging script');
+assert(read('.github/workflows/build.yml').includes('node scripts/verify-xiaowei-edition.js'), 'build workflow must run the Xiaowei edition verifier');
+assert(read('.github/workflows/build.yml').includes('npm run package:vsix'), 'build workflow must reuse the Xiaowei edition VSIX packaging script');
 
 const currentFiles = [
   'package.json',
@@ -77,5 +77,7 @@ for (const file of currentFiles) {
 const readme = read('README.md');
 assert(readme.includes('http://127.0.0.1:8766/mcp'), 'README.md must document the HTTP MCP endpoint');
 assert(readme.includes('MCP Server/启动 MCP Server'), 'README.md must keep the real MCP start menu path');
+assertNotContains('README.md', ['本地分叉版', 'y3-helper-local']);
+assertNotContains('README-EN.md', ['Local Fork', 'local VSIX fork', 'y3-helper-local']);
 
-console.log('local VSIX fork identity checks passed');
+console.log('Xiaowei edition identity checks passed');

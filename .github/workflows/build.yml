@@ -8,7 +8,7 @@ on:
       - '*'
 
 env:
-  VSIX_NAME: y3-helper-local-${{ github.sha }}.vsix
+  VSIX_NAME: y3-helper-xiaowei-${{ github.sha }}.vsix
 
 jobs:
   build:
@@ -31,11 +31,11 @@ jobs:
       - name: Pack vsix
         shell: bash
         run: |
-          node scripts/verify-local-vsix-fork.js
+          node scripts/verify-xiaowei-edition.js
           npm run package:vsix
 
       - name: Upload vsix
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.VSIX_NAME }}
-          path: dist/vsix/y3-helper-local-1.0.0.vsix
+          path: dist/vsix/y3-helper-xiaowei-*.vsix

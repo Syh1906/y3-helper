@@ -1,11 +1,11 @@
-# Y3 Helper Local Fork
+# Y3 Helper Xiaowei Edition
 
-This is the local VSIX fork of `Syh1906/y3-helper`. This branch is not published to the VSCode Marketplace. Build the `.vsix` package from source and install it manually.
+This is the Xiaowei edition of `Syh1906/y3-helper`. This branch is not published to the VSCode Marketplace. Build the `.vsix` package from source and install it manually.
 
 Extension identity:
 
 ```text
-syh1906.y3-helper-local
+syh1906.y3-helper-xiaowei
 ```
 
 ## Install
@@ -20,7 +20,7 @@ npm run package:vsix
 The VSIX package is generated at:
 
 ```text
-dist/vsix/y3-helper-local-1.0.5.vsix
+dist/vsix/y3-helper-xiaowei-1.0.6.vsix
 ```
 
 In VSCode, run `Extensions: Install from VSIX...` and select the generated file.

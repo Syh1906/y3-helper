@@ -67,7 +67,7 @@ export function createAgentGuide(snapshot: AgentContextSnapshot): string {
     return [
         '# Y3-Helper Agent Guide',
         '',
-        '你正在连接本地 VSIX 分叉版 Y3-Helper 提供的 MCP 服务。',
+        '你正在连接小为版 Y3-Helper 提供的 MCP 服务。',
         '',
         '## 启动顺序',
         '',

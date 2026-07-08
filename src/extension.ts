@@ -824,7 +824,7 @@ class Helper {
             await this.runStartupStep('checkNewProject', () => this.checkNewProject());
             await this.runStartupStep('mainMenu.init', () => mainMenu.init());
 
-            // 本地 VSIX 分支不再自动 clone、迁移或更新 y3-maker-config。
+            // 小为版不再自动 clone、迁移或更新 y3-maker-config。
             (async () => {
                 try {
                     await env.mapReady();

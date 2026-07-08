@@ -28,7 +28,7 @@ npm run package:vsix
 该命令会先执行 `vscode:prepublish`，再把安装包输出到：
 
 ```text
-dist/vsix/y3-helper-local-1.0.0.vsix
+dist/vsix/y3-helper-xiaowei-1.0.6.vsix
 ```
 
 ### 步骤三：安装 VSIX
@@ -61,7 +61,7 @@ npm run package:vsix
 
 ## 4. GitHub Actions
 
-`build.yml` 在推送 `main` 分支时运行。它会安装依赖、执行 TypeScript 编译检查，并生成 `dist/vsix/y3-helper-local-${{ github.sha }}.vsix` 作为 artifact。
+`build.yml` 在推送 `main` 分支时运行。它会安装依赖、执行 TypeScript 编译检查，并生成 `dist/vsix/y3-helper-xiaowei-${{ github.sha }}.vsix` 作为 artifact。
 
 当前分支没有自动发布工作流，也没有内网同步工作流。新增工作流时必须保持这个边界：只允许构建和检查，不允许发布到插件市场或同步到其他远端。
 
