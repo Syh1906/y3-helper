@@ -68,7 +68,6 @@ const {
   createCodexConfigToml,
   createRootAgentsMarkdown,
   createScriptAgentsMarkdown,
-  createY3MakerMcpSettingsJson,
 } = require(path.join(repoRoot, "out/aiDevEnvironment.js"));
 const {
   applyAiDevEnvironment,
@@ -89,16 +88,6 @@ for (const mapName of mapNames) {
     currentMapName: "EntryMap",
     skillSourceRoot,
   });
-  const scriptWorkspacePlan = buildAiDevEnvironmentPlan({
-    projectRoot,
-    scriptRoot,
-    currentMapName: "EntryMap",
-    skillSourceRoot,
-    y3MakerConfigRoot: scriptRoot,
-  });
-  if (scriptWorkspacePlan.y3MakerMcpSettingsPath !== `${scriptRoot}/.y3maker/mcp_settings.json`) {
-    throw new Error(`script workspace .y3maker path mismatch: ${scriptWorkspacePlan.y3MakerMcpSettingsPath}`);
-  }
   if (!plan.rootAgentsPath.startsWith(projectRoot)) {
     throw new Error(`plan escaped validation copy: ${plan.rootAgentsPath}`);
   }
@@ -127,16 +116,12 @@ for (const mapName of mapNames) {
   }
   const generatedCodexConfig = createCodexConfigToml("", true);
   const generatedClaudeConfig = createClaudeMcpJson("", true);
-  const generatedY3MakerConfig = createY3MakerMcpSettingsJson("", true);
   for (const serverName of ["y3-helper", "y3editor", "y3runtime"]) {
     if (!generatedCodexConfig.includes(`[mcp_servers.${serverName}]`)) {
       throw new Error(`missing Codex MCP server: ${serverName}`);
     }
     if (!generatedClaudeConfig.includes(serverName)) {
       throw new Error(`missing Claude MCP server: ${serverName}`);
-    }
-    if (!generatedY3MakerConfig.includes(serverName)) {
-      throw new Error(`missing Y3-Helper McpHub server: ${serverName}`);
     }
   }
   const skillTargetExistedBeforeSkip = fs.existsSync(`${plan.codexSkillTarget}/SKILL.md`);
@@ -186,10 +171,14 @@ for (const mapName of mapNames) {
     plan.codexConfigPath,
     plan.claudeMcpPath,
     plan.claudeSettingsPath,
-    plan.y3MakerMcpSettingsPath,
+    plan.scriptCodexConfigLink,
+    plan.scriptClaudeMcpLink,
+    plan.scriptClaudeSettingsLink,
     `${plan.codexSkillTarget}/SKILL.md`,
     `${plan.codexSkillTarget}/.y3-helper-ai-dev-env`,
     plan.claudeSkillLink,
+    plan.scriptCodexSkillLink,
+    plan.scriptClaudeSkillLink,
   ];
   for (const file of expectedFiles) {
     if (!fs.existsSync(file)) {
@@ -202,6 +191,25 @@ for (const mapName of mapNames) {
   if (!fs.lstatSync(plan.claudeSkillLink).isSymbolicLink()) {
     throw new Error(`Claude skill path is not a symbolic link: ${plan.claudeSkillLink}`);
   }
+  for (const link of [
+    plan.scriptCodexConfigLink,
+    plan.scriptClaudeMcpLink,
+    plan.scriptClaudeSettingsLink,
+    plan.scriptCodexSkillLink,
+    plan.scriptClaudeSkillLink,
+  ]) {
+    if (!fs.lstatSync(link).isSymbolicLink()) {
+      throw new Error(`script workspace AI config path is not a symbolic link: ${link}`);
+    }
+  }
+  for (const removedMcpHubPath of [
+    `${projectRoot}/.y3maker/mcp_settings.json`,
+    `${scriptRoot}/.y3maker/mcp_settings.json`,
+  ]) {
+    if (fs.existsSync(removedMcpHubPath)) {
+      throw new Error(`obsolete Y3-Helper McpHub config should not be generated: ${removedMcpHubPath}`);
+    }
+  }
   for (const serverName of ["y3-helper", "y3editor", "y3runtime"]) {
     if (!fs.readFileSync(plan.codexConfigPath, "utf8").includes(`[mcp_servers.${serverName}]`)) {
       throw new Error(`Codex MCP server missing after apply: ${serverName}`);
@@ -209,17 +217,22 @@ for (const mapName of mapNames) {
     if (!fs.readFileSync(plan.claudeMcpPath, "utf8").includes(serverName)) {
       throw new Error(`Claude MCP server missing after apply: ${serverName}`);
     }
-    if (!fs.readFileSync(plan.y3MakerMcpSettingsPath, "utf8").includes(serverName)) {
-      throw new Error(`Y3-Helper McpHub server missing after apply: ${serverName}`);
-    }
   }
   const gitignore = fs.readFileSync(plan.gitignorePath, "utf8");
-  if (!gitignore.includes("/.claude/settings.local.json")) {
+  const gitignoreLines = gitignore.split(/\r?\n/);
+  if (!gitignoreLines.includes("/.claude/settings.local.json")) {
     throw new Error(`Claude local settings rule missing from .gitignore: ${plan.gitignorePath}`);
   }
-  const gitignoreMatches = gitignore.match(/\/\.claude\/settings\.local\.json/g) || [];
-  if (gitignoreMatches.length !== 1) {
+  if (!gitignoreLines.includes("/maps/EntryMap/script/.claude/settings.local.json")) {
+    throw new Error(`script Claude local settings rule missing from .gitignore: ${plan.gitignorePath}`);
+  }
+  const rootGitignoreMatches = gitignoreLines.filter((line) => line === "/.claude/settings.local.json");
+  if (rootGitignoreMatches.length !== 1) {
     throw new Error(`Claude local settings rule duplicated in .gitignore: ${plan.gitignorePath}`);
+  }
+  const scriptGitignoreMatches = gitignoreLines.filter((line) => line === "/maps/EntryMap/script/.claude/settings.local.json");
+  if (scriptGitignoreMatches.length !== 1) {
+    throw new Error(`script Claude local settings rule duplicated in .gitignore: ${plan.gitignorePath}`);
   }
   await setAiMcpProjectConfigEnabled({
     projectRoot,
@@ -227,8 +240,15 @@ for (const mapName of mapNames) {
     currentMapName: "EntryMap",
     skillSourceRoot,
   }, false);
-  if (!fs.readFileSync(plan.codexConfigPath, "utf8").includes("enabled = false")) {
-    throw new Error(`Codex MCP config was not disabled: ${plan.codexConfigPath}`);
+  const disabledCodex = fs.readFileSync(plan.codexConfigPath, "utf8");
+  if ((disabledCodex.match(/enabled = false/g) ?? []).length !== 3) {
+    throw new Error(`Codex MCP config was not disabled for all Y3 servers: ${plan.codexConfigPath}`);
+  }
+  const disabledClaudeMcp = JSON.parse(fs.readFileSync(plan.claudeMcpPath, "utf8"));
+  for (const serverName of ["y3-helper", "y3editor", "y3runtime"]) {
+    if (disabledClaudeMcp.mcpServers[serverName].disabled !== true) {
+      throw new Error(`Claude .mcp.json was not disabled for ${serverName}: ${plan.claudeMcpPath}`);
+    }
   }
   const disabledSettings = JSON.parse(fs.readFileSync(plan.claudeSettingsPath, "utf8"));
   for (const serverName of ["y3-helper", "y3editor", "y3runtime"]) {
@@ -236,22 +256,25 @@ for (const mapName of mapNames) {
       throw new Error(`Claude MCP config was not disabled for ${serverName}: ${plan.claudeSettingsPath}`);
     }
   }
-  const disabledY3MakerSettings = JSON.parse(fs.readFileSync(plan.y3MakerMcpSettingsPath, "utf8"));
-  if (!disabledY3MakerSettings.mcpServers.y3runtime.disabled) {
-    throw new Error(`Y3-Helper McpHub config was not disabled: ${plan.y3MakerMcpSettingsPath}`);
-  }
   await setAiMcpProjectConfigEnabled({
     projectRoot,
     scriptRoot,
     currentMapName: "EntryMap",
     skillSourceRoot,
   }, true);
-  if (!fs.readFileSync(plan.codexConfigPath, "utf8").includes("enabled = true")) {
-    throw new Error(`Codex MCP config was not enabled: ${plan.codexConfigPath}`);
+  const enabledCodex = fs.readFileSync(plan.codexConfigPath, "utf8");
+  if ((enabledCodex.match(/enabled = true/g) ?? []).length !== 3) {
+    throw new Error(`Codex MCP config was not enabled for all Y3 servers: ${plan.codexConfigPath}`);
   }
-  const enabledY3MakerSettings = JSON.parse(fs.readFileSync(plan.y3MakerMcpSettingsPath, "utf8"));
-  if (enabledY3MakerSettings.mcpServers.y3runtime.disabled) {
-    throw new Error(`Y3-Helper McpHub config was not enabled: ${plan.y3MakerMcpSettingsPath}`);
+  const enabledClaudeMcp = JSON.parse(fs.readFileSync(plan.claudeMcpPath, "utf8"));
+  const enabledSettings = JSON.parse(fs.readFileSync(plan.claudeSettingsPath, "utf8"));
+  for (const serverName of ["y3-helper", "y3editor", "y3runtime"]) {
+    if (enabledClaudeMcp.mcpServers[serverName].disabled !== false) {
+      throw new Error(`Claude .mcp.json was not enabled for ${serverName}: ${plan.claudeMcpPath}`);
+    }
+    if (!enabledSettings.enabledMcpjsonServers.includes(serverName) || enabledSettings.disabledMcpjsonServers.includes(serverName)) {
+      throw new Error(`Claude settings were not enabled for ${serverName}: ${plan.claudeSettingsPath}`);
+    }
   }
   fs.writeFileSync(plan.codexConfigPath, '[mcp_servers.y3-helper]\nurl = "http://127.0.0.1:9999/mcp"\nenabled = true\n', "utf8");
   let conflictRejected = false;

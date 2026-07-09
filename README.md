@@ -20,7 +20,7 @@ npm run package:vsix
 生成的安装包位于：
 
 ```text
-dist/vsix/y3-helper-xiaowei-1.0.6.vsix
+dist/vsix/y3-helper-xiaowei-1.0.9.vsix
 ```
 
 在 VSCode 中按 `Ctrl+Shift+P`，输入 `Extensions: Install from VSIX...`，选择该 `.vsix` 文件安装。
@@ -102,6 +102,12 @@ http://127.0.0.1:8766/mcp
 2. 打开已初始化的 Y3 地图工程
 3. 在侧边栏“Y3开发助手”中点击 `MCP Server/启动 MCP Server`
 4. 用支持 Streamable HTTP MCP 的客户端连接 `http://127.0.0.1:8766/mcp`
+
+侧边栏 `MCP Server` 节点会显示当前本地服务状态：`运行中`、`未运行` 或 `设置关闭`。这里的“启动 / 停止 MCP Server”只控制扩展内置的本地 8766 服务，不会修改 Codex / Claude 项目 MCP 配置里的启用状态。
+
+需要启用或禁用 Codex / Claude 项目 MCP 配置时，请打开 `MCP Server/Agent 接入中心`，使用“启用 AI MCP 项目配置”或“禁用 AI MCP 项目配置”。
+
+启动或停止 MCP Server 后，已连接的外部 Agent 客户端通常不会自动刷新 MCP 连接状态。若 Agent 仍显示旧状态，请重启或刷新对应 Agent 客户端。
 
 可以用下面的命令检查服务是否已经启动：
 

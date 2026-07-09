@@ -8,6 +8,15 @@ import { WebviewTerminal } from "../../console/webviewTerminal";
 import * as globalScript from '../../globalScript';
 import * as l10n from '@vscode/l10n';
 import { isY3LibraryUsable } from '../../y3ProjectInit';
+import { getMcpStartMode } from '../../mcp/config';
+import { isMcpServerRunning } from '../../mcp/runtimeStatus';
+import {
+    getAgentMcpProjectConfigDescription,
+    getAgentMcpProjectConfigTooltip,
+    getMcpRuntimeStatusDescription,
+    getMcpRuntimeStatusTooltip,
+} from '../../agentAccessCenterModel';
+import { getCurrentAiMcpProjectConfigState } from '../../agentAccessCenter';
 
 function 多开模式() {
     let node = new TreeNode(l10n.t('多开模式'), {
@@ -303,15 +312,37 @@ export class 功能 extends TreeNode {
                 切换自定义视图(),
                 new TreeNode('MCP Server', {
                     iconPath: new vscode.ThemeIcon('plug'),
-                    tooltip: l10n.t('MCP Server 用于 Claude Code 连接'),
+                    update: (node) => {
+                        const mode = getMcpStartMode();
+                        const running = isMcpServerRunning();
+                        node.description = l10n.t(getMcpRuntimeStatusDescription(running, mode));
+                        node.tooltip = l10n.t(getMcpRuntimeStatusTooltip(running, mode));
+                    },
                     childs: [
+                        new TreeNode(l10n.t('MCP 运行状态'), {
+                            iconPath: new vscode.ThemeIcon('info'),
+                            update: (node) => {
+                                const mode = getMcpStartMode();
+                                const running = isMcpServerRunning();
+                                node.description = l10n.t(getMcpRuntimeStatusDescription(running, mode));
+                                node.tooltip = l10n.t(getMcpRuntimeStatusTooltip(running, mode));
+                            },
+                        }),
+                        new TreeNode(l10n.t('Agent 配置状态'), {
+                            iconPath: new vscode.ThemeIcon('settings-gear'),
+                            update: async (node) => {
+                                const state = await getCurrentAiMcpProjectConfigState();
+                                node.description = l10n.t(getAgentMcpProjectConfigDescription(state));
+                                node.tooltip = l10n.t(getAgentMcpProjectConfigTooltip(state));
+                            },
+                        }),
                         new TreeNode(l10n.t('启动 MCP Server'), {
                             iconPath: new vscode.ThemeIcon('play'),
                             command: {
                                 command: 'y3-helper.startMCPServer',
                                 title: l10n.t('启动 MCP Server'),
                             },
-                            tooltip: l10n.t('启动 MCP Server，允许 Claude Code 连接'),
+                            tooltip: l10n.t('启动本地 8766 MCP 服务。该操作不会修改 Codex / Claude 项目 MCP 配置。'),
                         }),
                         new TreeNode(l10n.t('停止 MCP Server'), {
                             iconPath: new vscode.ThemeIcon('debug-stop'),
@@ -319,7 +350,31 @@ export class 功能 extends TreeNode {
                                 command: 'y3-helper.stopMCPServer',
                                 title: l10n.t('停止 MCP Server'),
                             },
-                            tooltip: l10n.t('停止 MCP Server'),
+                            tooltip: l10n.t('停止本地 8766 MCP 服务。外部 Agent 客户端通常需要重启或刷新后才能感知连接变化。'),
+                        }),
+                        new TreeNode(l10n.t('Agent 接入中心'), {
+                            iconPath: new vscode.ThemeIcon('account'),
+                            command: {
+                                command: 'y3-helper.openAgentAccessCenter',
+                                title: l10n.t('Agent 接入中心'),
+                            },
+                            tooltip: l10n.t('打开 Agent 接入中心，用于初始化 AI 开发环境，或启用 / 禁用 Codex / Claude 项目 MCP 配置。'),
+                        }),
+                        new TreeNode(l10n.t('启用 AI MCP 项目配置'), {
+                            iconPath: new vscode.ThemeIcon('check'),
+                            command: {
+                                command: 'y3-helper.enableAiMcpConfig',
+                                title: l10n.t('启用 AI MCP 项目配置'),
+                            },
+                            tooltip: l10n.t('同时启用 Codex config.toml、Claude .mcp.json 和 Claude settings.local.json 中的三项 Y3 MCP 配置。'),
+                        }),
+                        new TreeNode(l10n.t('禁用 AI MCP 项目配置'), {
+                            iconPath: new vscode.ThemeIcon('circle-slash'),
+                            command: {
+                                command: 'y3-helper.disableAiMcpConfig',
+                                title: l10n.t('禁用 AI MCP 项目配置'),
+                            },
+                            tooltip: l10n.t('同时禁用 Codex config.toml、Claude .mcp.json 和 Claude settings.local.json 中的三项 Y3 MCP 配置。'),
                         }),
                     ],
                 }),

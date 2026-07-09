@@ -3,7 +3,7 @@
     "displayName": "Y3开发助手（小为版）",
     "description": "",
     "publisher": "syh1906",
-    "version": "1.0.6",
+    "version": "1.0.9",
     "repository": {
         "url": "https://github.com/Syh1906/y3-helper"
     },
@@ -383,6 +383,16 @@
             {
                 "command": "y3-helper.initializeAiDevEnvironment",
                 "title": "初始化 / 修复 AI 开发环境",
+                "category": "%Y3开发助手%"
+            },
+            {
+                "command": "y3-helper.enableAiMcpConfig",
+                "title": "启用 AI MCP 项目配置",
+                "category": "%Y3开发助手%"
+            },
+            {
+                "command": "y3-helper.disableAiMcpConfig",
+                "title": "禁用 AI MCP 项目配置",
                 "category": "%Y3开发助手%"
             }
         ],

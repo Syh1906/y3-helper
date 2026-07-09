@@ -20,7 +20,7 @@ npm run package:vsix
 The VSIX package is generated at:
 
 ```text
-dist/vsix/y3-helper-xiaowei-1.0.6.vsix
+dist/vsix/y3-helper-xiaowei-1.0.9.vsix
 ```
 
 In VSCode, run `Extensions: Install from VSIX...` and select the generated file.
@@ -52,6 +52,12 @@ Then connect an MCP client that supports Streamable HTTP to:
 ```text
 http://127.0.0.1:8766/mcp
 ```
+
+The sidebar `MCP Server` node shows the current local server state: running, not running, or disabled by settings. Starting or stopping the MCP server only controls the local 8766 service inside the extension. It does not change the enabled state in Codex or Claude project MCP configuration files.
+
+To enable or disable Codex / Claude project MCP configuration, open `MCP Server -> Agent 接入中心` and use the AI MCP project config actions.
+
+After starting or stopping the MCP server, connected external agent clients usually do not refresh their MCP connection state automatically. Restart or refresh the agent client if it still shows the old state.
 
 Health check:
 

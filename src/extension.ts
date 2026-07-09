@@ -30,6 +30,8 @@ import * as mcp from './mcp';
 import { getMcpHub } from './codemaker/mcpHandlers';
 import { registerAgentAccessCenter } from './agentAccessCenter';
 import { canAutoStartMcp, getMcpStartMode } from './mcp/config';
+import { setMcpServerRunning } from './mcp/runtimeStatus';
+import { AGENT_CLIENT_MCP_REFRESH_NOTICE } from './agentAccessCenterModel';
 import {
     makeY3LibraryCloneArgs,
     resolveY3LibraryRepoUrl,
@@ -618,12 +620,16 @@ class Helper {
             if (!started) {
                 this.tcpServer.dispose();
                 this.tcpServer = undefined;
+                setMcpServerRunning(false);
+                mainMenu.refresh();
                 tools.log.warn('[Y3-Helper] MCP HTTP server did not bind to port 8766');
                 if (!silent) {
                     vscode.window.showWarningMessage(l10n.t('MCP Server 端口 8766 已被占用，当前实例未启动'));
                 }
                 return false;
             }
+            setMcpServerRunning(true);
+            mainMenu.refresh();
             tools.log.info('[Y3-Helper] MCP Server started');
             // TCPServer 就绪后再启动 McpHub，避免 McpHub 连接 y3-helper:8766 时端口尚未监听
             // 确保 McpHub 已启动（注册文件监听 + 初始化 MCP servers）
@@ -633,6 +639,10 @@ class Helper {
             }
             return true;
         } catch (error) {
+            this.tcpServer?.dispose();
+            this.tcpServer = undefined;
+            setMcpServerRunning(false);
+            mainMenu.refresh();
             tools.log.error('[Y3-Helper] Failed to start MCP Server:', error);
             if (!silent) {
                 vscode.window.showErrorMessage(l10n.t('启动 MCP Server 失败'));
@@ -645,6 +655,8 @@ class Helper {
         if (this.tcpServer) {
             this.tcpServer.dispose();
             this.tcpServer = undefined;
+            setMcpServerRunning(false);
+            mainMenu.refresh();
             tools.log.info('[Y3-Helper] TCP Server stopped');
         }
     }
@@ -705,11 +717,11 @@ class Helper {
                 return;
             }
             if (this.tcpServer) {
-                vscode.window.showInformationMessage(l10n.t('MCP Server 已经在运行'));
+                vscode.window.showInformationMessage(l10n.t('MCP Server 已经在运行。{0}', AGENT_CLIENT_MCP_REFRESH_NOTICE));
                 return;
             }
             if (await this.startTCPServer()) {
-                vscode.window.showInformationMessage(l10n.t('MCP Server 已启动'));
+                vscode.window.showInformationMessage(l10n.t('MCP Server 已启动。{0}', AGENT_CLIENT_MCP_REFRESH_NOTICE));
             }
         });
 
@@ -719,25 +731,26 @@ class Helper {
                 return;
             }
             this.stopTCPServer();
-            vscode.window.showInformationMessage(l10n.t('MCP Server 已停止'));
+            vscode.window.showInformationMessage(l10n.t('MCP Server 已停止。{0}', AGENT_CLIENT_MCP_REFRESH_NOTICE));
         });
     }
 
     private registerCommandOfAgentAccessCenter() {
         const disposables = registerAgentAccessCenter({
             isMcpRunning: () => this.tcpServer !== undefined,
+            refreshMainMenu: () => mainMenu.refresh(),
             startMcp: async () => {
                 if (getMcpStartMode() === 'off') {
                     vscode.window.showInformationMessage(l10n.t('MCP Server 已在设置中关闭'));
                     return false;
                 }
                 if (this.tcpServer) {
-                    vscode.window.showInformationMessage(l10n.t('MCP Server 已经在运行'));
+                    vscode.window.showInformationMessage(l10n.t('MCP Server 已经在运行。{0}', AGENT_CLIENT_MCP_REFRESH_NOTICE));
                     return true;
                 }
                 const started = await this.startTCPServer();
                 if (started) {
-                    vscode.window.showInformationMessage(l10n.t('MCP Server 已启动'));
+                    vscode.window.showInformationMessage(l10n.t('MCP Server 已启动。{0}', AGENT_CLIENT_MCP_REFRESH_NOTICE));
                 }
                 return started;
             },
@@ -747,7 +760,7 @@ class Helper {
                     return;
                 }
                 this.stopTCPServer();
-                vscode.window.showInformationMessage(l10n.t('MCP Server 已停止'));
+                vscode.window.showInformationMessage(l10n.t('MCP Server 已停止。{0}', AGENT_CLIENT_MCP_REFRESH_NOTICE));
             },
         });
         this.context.subscriptions.push(...disposables);

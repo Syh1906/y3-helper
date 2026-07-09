@@ -1,7 +1,10 @@
 import * as path from 'path';
 import { MCP_ENDPOINT } from './mcp/agentContext';
+import type { AgentMcpProjectConfigState } from './agentAccessCenterModel';
 
 export const AI_DEV_ENV_MARKER = '<!-- Y3_HELPER_AI_DEV_ENV -->';
+export const AI_DEV_ENV_BLOCK_BEGIN = '<!-- Y3_HELPER_AI_DEV_ENV:BEGIN -->';
+export const AI_DEV_ENV_BLOCK_END = '<!-- Y3_HELPER_AI_DEV_ENV:END -->';
 export const CLAUDE_LOCAL_SETTINGS_GITIGNORE_RULE = '/.claude/settings.local.json';
 const Y3_MCP_SERVERS = [
     {
@@ -20,6 +23,7 @@ const Y3_MCP_SERVERS = [
         role: '运行中游戏交互、UI 自动化和验收入口。',
     },
 ] as const;
+const LEGACY_Y3MAKER_MCP_SERVER_KEYS = ['autoApprove', 'disabled', 'headers', 'timeout', 'type', 'url'];
 
 export interface AiDevEnvironmentSnapshot {
     projectRoot?: string;
@@ -33,7 +37,6 @@ export interface AiDevEnvironmentSnapshot {
 
 export interface AiDevEnvironmentPlanInput extends AiDevEnvironmentSnapshot {
     skillSourceRoot?: string;
-    y3MakerConfigRoot?: string;
 }
 
 export interface AiDevEnvironmentPlan {
@@ -48,17 +51,32 @@ export interface AiDevEnvironmentPlan {
     claudeMcpPath: string;
     claudeSettingsPath: string;
     gitignorePath: string;
-    y3MakerMcpSettingsPath: string;
+    scriptCodexConfigLink: string;
+    scriptClaudeMcpLink: string;
+    scriptClaudeSettingsLink: string;
+    scriptCodexSkillLink: string;
+    scriptClaudeSkillLink: string;
+    scriptClaudeSettingsGitignoreRule: string;
 }
 
 export function createRootAgentsMarkdown(snapshot: AiDevEnvironmentSnapshot): string {
+    return createManagedAgentsMarkdown(
+        '# Y3 地图工程 Agent 指南',
+        createRootAgentsMarkdownBody(snapshot),
+    );
+}
+
+export function createLegacyRootAgentsMarkdown(snapshot: AiDevEnvironmentSnapshot): string {
+    return createLegacyAgentsMarkdown(
+        '# Y3 地图工程 Agent 指南',
+        createRootAgentsMarkdownBody(snapshot),
+    );
+}
+
+function createRootAgentsMarkdownBody(snapshot: AiDevEnvironmentSnapshot): string[] {
     const scriptRoute = toProjectRelativePath(snapshot.projectRoot, snapshot.scriptRoot) ?? 'maps/<当前地图>/script';
 
     return [
-        '# Y3 地图工程 Agent 指南',
-        '',
-        AI_DEV_ENV_MARKER,
-        '',
         '## 地图工程模块路由',
         '',
         `- \`${scriptRoute}\`：Lua 业务逻辑、玩法系统、UI 绑定脚本。`,
@@ -84,17 +102,27 @@ export function createRootAgentsMarkdown(snapshot: AiDevEnvironmentSnapshot): st
         '- MCP 职责：',
         ...Y3_MCP_SERVERS.map((server) => `  - \`${server.name}\`：${server.role}`),
         '- `y3editor` 和 `y3runtime` 依赖编辑器或游戏运行状态；离线时不要视为初始化失败。',
-    ].join('\n');
+    ];
 }
 
 export function createScriptAgentsMarkdown(snapshot: AiDevEnvironmentSnapshot): string {
+    return createManagedAgentsMarkdown(
+        '# Y3 地图脚本 Agent 指南',
+        createScriptAgentsMarkdownBody(snapshot),
+    );
+}
+
+export function createLegacyScriptAgentsMarkdown(snapshot: AiDevEnvironmentSnapshot): string {
+    return createLegacyAgentsMarkdown(
+        '# Y3 地图脚本 Agent 指南',
+        createScriptAgentsMarkdownBody(snapshot),
+    );
+}
+
+function createScriptAgentsMarkdownBody(snapshot: AiDevEnvironmentSnapshot): string[] {
     const scriptRoute = toProjectRelativePath(snapshot.projectRoot, snapshot.scriptRoot) ?? 'maps/<当前地图>/script';
 
     return [
-        '# Y3 地图脚本 Agent 指南',
-        '',
-        AI_DEV_ENV_MARKER,
-        '',
         '## Lua 业务开发',
         '',
         '- 地图工程根目录：当前地图工程根目录（包含 `header.project`）。',
@@ -121,6 +149,28 @@ export function createScriptAgentsMarkdown(snapshot: AiDevEnvironmentSnapshot): 
         '3. `y3editor`：编辑器资源、物编、UI 热更、保存与导入；编辑器未打开时可暂不可用。',
         '4. `y3runtime`：运行中 UI 自动化、交互验收；游戏未运行时可暂不可用。',
         '5. 先用 `get_game_status` 判断状态，再按需调用对应 MCP 工具。',
+    ];
+}
+
+function createManagedAgentsMarkdown(title: string, bodyLines: string[]): string {
+    return [
+        title,
+        '',
+        AI_DEV_ENV_BLOCK_BEGIN,
+        AI_DEV_ENV_MARKER,
+        '',
+        ...bodyLines,
+        AI_DEV_ENV_BLOCK_END,
+    ].join('\n');
+}
+
+function createLegacyAgentsMarkdown(title: string, bodyLines: string[]): string {
+    return [
+        title,
+        '',
+        AI_DEV_ENV_MARKER,
+        '',
+        ...bodyLines,
     ].join('\n');
 }
 
@@ -128,7 +178,7 @@ export function buildAiDevEnvironmentPlan(input: AiDevEnvironmentPlanInput): AiD
     const projectRoot = requirePath(input.projectRoot, 'projectRoot');
     const scriptRoot = requirePath(input.scriptRoot, 'scriptRoot');
     const skillSourceRoot = input.skillSourceRoot ? normalizePath(input.skillSourceRoot) : undefined;
-    const y3MakerConfigRoot = input.y3MakerConfigRoot ? normalizePath(input.y3MakerConfigRoot) : projectRoot;
+    const scriptClaudeSettingsPath = joinPath(scriptRoot, '.claude', 'settings.local.json');
 
     return {
         rootAgentsPath: joinPath(projectRoot, 'AGENTS.md'),
@@ -142,18 +192,25 @@ export function buildAiDevEnvironmentPlan(input: AiDevEnvironmentPlanInput): AiD
         claudeMcpPath: joinPath(projectRoot, '.mcp.json'),
         claudeSettingsPath: joinPath(projectRoot, '.claude', 'settings.local.json'),
         gitignorePath: joinPath(projectRoot, '.gitignore'),
-        y3MakerMcpSettingsPath: joinPath(y3MakerConfigRoot, '.y3maker', 'mcp_settings.json'),
+        scriptCodexConfigLink: joinPath(scriptRoot, '.codex', 'config.toml'),
+        scriptClaudeMcpLink: joinPath(scriptRoot, '.mcp.json'),
+        scriptClaudeSettingsLink: scriptClaudeSettingsPath,
+        scriptCodexSkillLink: joinPath(scriptRoot, '.codex', 'skills', 'y3-kernel-navigator'),
+        scriptClaudeSkillLink: joinPath(scriptRoot, '.claude', 'skills', 'y3-kernel-navigator'),
+        scriptClaudeSettingsGitignoreRule: createRootRelativeGitignoreRule(projectRoot, scriptClaudeSettingsPath),
     };
 }
 
-export function mergeAiDevEnvironmentGitignore(existingContent: string): string {
+export function mergeAiDevEnvironmentGitignore(existingContent: string, extraRules: string[] = []): string {
     const normalized = existingContent.replace(/\r\n/g, '\n');
+    const requiredRules = [CLAUDE_LOCAL_SETTINGS_GITIGNORE_RULE, ...extraRules].filter((rule, index, rules) => rule && rules.indexOf(rule) === index);
     const lines = normalized.split('\n');
-    if (lines.includes(CLAUDE_LOCAL_SETTINGS_GITIGNORE_RULE)) {
+    const missingRules = requiredRules.filter((rule) => !lines.includes(rule));
+    if (missingRules.length === 0) {
         return normalized.endsWith('\n') ? normalized : `${normalized}\n`;
     }
     const trimmed = normalized.trimEnd();
-    return `${trimmed ? `${trimmed}\n` : ''}\n# Claude local settings\n${CLAUDE_LOCAL_SETTINGS_GITIGNORE_RULE}\n`;
+    return `${trimmed ? `${trimmed}\n` : ''}\n# Claude local settings\n${missingRules.join('\n')}\n`;
 }
 
 export function createCodexConfigToml(existingContent: string, enabled: boolean): string {
@@ -161,14 +218,16 @@ export function createCodexConfigToml(existingContent: string, enabled: boolean)
     for (const server of Y3_MCP_SERVERS) {
         const blockPattern = createCodexServerBlockPattern(server.name);
         const existingBlock = content.match(blockPattern)?.[0];
-        const header = existingBlock?.match(/^\s*(\[mcp_servers\.(?:"[^"]+"|[^\]]+)\])/m)?.[1] ?? `[mcp_servers.${server.name}]`;
-        const block = [
-            header,
-            `url = "${server.url}"`,
-            'transport = "streamable_http"',
-            'tool_timeout_sec = 60',
-            `enabled = ${enabled ? 'true' : 'false'}`,
-        ].join('\n');
+        const block = createCodexServerBlock(
+            existingBlock,
+            server.name,
+            {
+                url: server.url,
+                transport: 'streamable_http',
+                tool_timeout_sec: '60',
+                enabled: enabled ? 'true' : 'false',
+            },
+        );
 
         if (blockPattern.test(content)) {
             content = content.replace(blockPattern, block).trimEnd();
@@ -185,26 +244,10 @@ export function createClaudeMcpJson(existingContent: string, enabled: boolean): 
     root.mcpServers = mcpServers;
     for (const server of Y3_MCP_SERVERS) {
         mcpServers[server.name] = {
+            ...asObject(mcpServers[server.name]),
             type: 'http',
             url: server.url,
             timeout: 60000,
-            disabled: !enabled,
-        };
-    }
-    return `${JSON.stringify(root, null, 2)}\n`;
-}
-
-export function createY3MakerMcpSettingsJson(existingContent: string, enabled: boolean): string {
-    const root = parseJsonObject(existingContent);
-    const mcpServers = asObject(root.mcpServers);
-    root.mcpServers = mcpServers;
-    for (const server of Y3_MCP_SERVERS) {
-        mcpServers[server.name] = {
-            type: 'streamableHttp',
-            url: server.url,
-            headers: {},
-            timeout: 60,
-            autoApprove: true,
             disabled: !enabled,
         };
     }
@@ -227,6 +270,25 @@ export function createClaudeSettingsJson(existingContent: string, enabled: boole
     return `${JSON.stringify(root, null, 2)}\n`;
 }
 
+export function readAiMcpProjectConfigState(input: {
+    codexConfigContent?: string;
+    claudeMcpContent?: string;
+    claudeSettingsContent?: string;
+}): AgentMcpProjectConfigState | undefined {
+    if (
+        input.codexConfigContent === undefined
+        || input.claudeMcpContent === undefined
+        || input.claudeSettingsContent === undefined
+    ) {
+        return undefined;
+    }
+    return {
+        codexEnabled: readCodexMcpConfigEnabled(input.codexConfigContent),
+        claudeMcpEnabled: readClaudeMcpJsonEnabled(input.claudeMcpContent),
+        claudeSettingsEnabled: readClaudeSettingsEnabled(input.claudeSettingsContent),
+    };
+}
+
 export function hasCodexY3HelperMcpConflict(existingContent: string): boolean {
     for (const server of Y3_MCP_SERVERS) {
         const block = existingContent.match(createCodexServerBlockPattern(server.name))?.[0];
@@ -247,10 +309,80 @@ export function hasClaudeY3HelperMcpConflict(existingContent: string): boolean {
     return hasJsonMcpServerConflict(mcpServers);
 }
 
-export function hasY3MakerMcpSettingsConflict(existingContent: string): boolean {
-    const root = parseJsonObject(existingContent);
+export function hasClaudeSettingsJsonConflict(existingContent: string): boolean {
+    parseJsonObject(existingContent);
+    return false;
+}
+
+function readCodexMcpConfigEnabled(content: string): boolean {
+    for (const server of Y3_MCP_SERVERS) {
+        const block = content.match(createCodexServerBlockPattern(server.name))?.[0];
+        if (!block) {
+            return false;
+        }
+        const url = block.match(/^\s*url\s*=\s*"([^"]+)"/m)?.[1];
+        if (url !== server.url) {
+            return false;
+        }
+        const enabled = block.match(/^\s*enabled\s*=\s*(true|false)/m)?.[1];
+        if (enabled !== 'true') {
+            return false;
+        }
+    }
+    return true;
+}
+
+function readClaudeMcpJsonEnabled(content: string): boolean {
+    const root = parseJsonObject(content);
     const mcpServers = asObject(root.mcpServers);
-    return hasJsonMcpServerConflict(mcpServers);
+    for (const server of Y3_MCP_SERVERS) {
+        const config = asObject(mcpServers[server.name]);
+        if (config.url !== server.url || config.disabled !== false) {
+            return false;
+        }
+    }
+    return true;
+}
+
+function readClaudeSettingsEnabled(content: string): boolean {
+    const root = parseJsonObject(content);
+    const enabledServers = uniqueStringArray(root.enabledMcpjsonServers);
+    const disabledServers = uniqueStringArray(root.disabledMcpjsonServers);
+    for (const server of Y3_MCP_SERVERS) {
+        if (!enabledServers.includes(server.name) || disabledServers.includes(server.name)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+export function isObsoleteY3MakerMcpSettingsJson(existingContent: string): boolean {
+    const root = parseJsonObject(existingContent);
+    if (!hasExactKeys(root, ['mcpServers'])) {
+        return false;
+    }
+    const mcpServers = asObject(root.mcpServers);
+    if (!hasExactKeys(mcpServers, Y3_MCP_SERVERS.map((server) => server.name))) {
+        return false;
+    }
+    for (const server of Y3_MCP_SERVERS) {
+        const serverConfig = asObject(mcpServers[server.name]);
+        if (!hasExactKeys(serverConfig, LEGACY_Y3MAKER_MCP_SERVER_KEYS)) {
+            return false;
+        }
+        const headers = asObject(serverConfig.headers);
+        if (
+            serverConfig.type !== 'streamableHttp'
+            || serverConfig.url !== server.url
+            || Object.keys(headers).length !== 0
+            || serverConfig.timeout !== 60
+            || serverConfig.autoApprove !== true
+            || typeof serverConfig.disabled !== 'boolean'
+        ) {
+            return false;
+        }
+    }
+    return true;
 }
 
 function hasJsonMcpServerConflict(mcpServers: Record<string, any>): boolean {
@@ -276,12 +408,52 @@ export function isManagedAiDevEnvironmentFile(content: string): boolean {
     return content.includes(AI_DEV_ENV_MARKER);
 }
 
+export function isUnmodifiedManagedAiDevEnvironmentFile(existingContent: string, expectedContent: string): boolean {
+    return normalizeGeneratedContent(existingContent) === normalizeGeneratedContent(expectedContent);
+}
+
+export function mergeManagedAiDevEnvironmentFile(existingContent: string | undefined, expectedContent: string, legacyExpectedContent?: string): string | undefined {
+    const normalizedExpected = normalizeGeneratedContent(expectedContent);
+    if (existingContent === undefined) {
+        return normalizedExpected;
+    }
+
+    const existingBlock = getManagedBlockRange(existingContent);
+    const expectedBlock = getManagedBlockRange(normalizedExpected);
+    if (existingBlock && expectedBlock) {
+        return normalizeGeneratedContent([
+            existingContent.slice(0, existingBlock.start),
+            normalizedExpected.slice(expectedBlock.start, expectedBlock.end),
+            existingContent.slice(existingBlock.end),
+        ].join(''));
+    }
+
+    if (!existingContent.includes(AI_DEV_ENV_MARKER)) {
+        return undefined;
+    }
+
+    if (legacyExpectedContent !== undefined) {
+        const normalizedExisting = normalizeGeneratedContent(existingContent);
+        const normalizedLegacy = normalizeGeneratedContent(legacyExpectedContent);
+        if (normalizedExisting.startsWith(normalizedLegacy)) {
+            return normalizeGeneratedContent(`${normalizedExpected}${normalizedExisting.slice(normalizedLegacy.length)}`);
+        }
+    }
+
+    return normalizeGeneratedContent(existingContent) === normalizedExpected
+        ? normalizedExpected
+        : undefined;
+}
+
 function parseJsonObject(content: string): Record<string, any> {
     if (!content.trim()) {
         return {};
     }
     const parsed = JSON.parse(content);
-    return asObject(parsed);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        throw new Error('JSON root must be an object');
+    }
+    return parsed as Record<string, any>;
 }
 
 function asObject(value: unknown): Record<string, any> {
@@ -309,6 +481,13 @@ function removeNames(values: string[], names: string[]): string[] {
     return values.filter((value) => !names.includes(value));
 }
 
+function hasExactKeys(value: Record<string, any>, expectedKeys: readonly string[]): boolean {
+    const actualKeys = Object.keys(value).sort();
+    const sortedExpectedKeys = [...expectedKeys].sort();
+    return actualKeys.length === sortedExpectedKeys.length
+        && actualKeys.every((key, index) => key === sortedExpectedKeys[index]);
+}
+
 function requirePath(value: string | undefined, name: string): string {
     if (!value) {
         throw new Error(`${name} is required`);
@@ -324,12 +503,68 @@ function createCodexServerBlockPattern(serverName: string): RegExp {
     return new RegExp(`\\[mcp_servers\\.(?:"${escapeRegExp(serverName)}"|${escapeRegExp(serverName)})\\][\\s\\S]*?(?=\\n\\[|$)`);
 }
 
+function createCodexServerBlock(existingBlock: string | undefined, serverName: string, managedFields: Record<string, string>): string {
+    const header = existingBlock?.match(/^\s*(\[mcp_servers\.(?:"[^"]+"|[^\]]+)\])/m)?.[1] ?? `[mcp_servers.${serverName}]`;
+    const lines = existingBlock ? existingBlock.trimEnd().split('\n') : [header];
+    const result = [header];
+    const remainingFields = new Set(Object.keys(managedFields));
+
+    for (const line of lines.slice(1)) {
+        const key = line.match(/^\s*([A-Za-z0-9_-]+)\s*=/)?.[1];
+        if (key && Object.prototype.hasOwnProperty.call(managedFields, key)) {
+            result.push(`${key} = ${formatTomlValue(managedFields[key])}`);
+            remainingFields.delete(key);
+        } else {
+            result.push(line);
+        }
+    }
+
+    for (const [key, value] of Object.entries(managedFields)) {
+        if (remainingFields.has(key)) {
+            result.push(`${key} = ${formatTomlValue(value)}`);
+        }
+    }
+
+    return result.join('\n');
+}
+
+function formatTomlValue(value: string): string {
+    if (value === 'true' || value === 'false' || /^\d+$/.test(value)) {
+        return value;
+    }
+    return `"${value}"`;
+}
+
 function escapeRegExp(value: string): string {
     return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function normalizePath(value: string): string {
     return value.replace(/\\/g, '/');
+}
+
+function normalizeGeneratedContent(content: string): string {
+    return `${content.replace(/\r\n/g, '\n').trimEnd()}\n`;
+}
+
+function getManagedBlockRange(content: string): { start: number; end: number } | undefined {
+    const start = content.indexOf(AI_DEV_ENV_BLOCK_BEGIN);
+    if (start < 0) {
+        return undefined;
+    }
+    const endStart = content.indexOf(AI_DEV_ENV_BLOCK_END, start + AI_DEV_ENV_BLOCK_BEGIN.length);
+    if (endStart < 0) {
+        return undefined;
+    }
+    return {
+        start,
+        end: endStart + AI_DEV_ENV_BLOCK_END.length,
+    };
+}
+
+function createRootRelativeGitignoreRule(projectRoot: string, targetPath: string): string {
+    const relative = toProjectRelativePath(projectRoot, targetPath);
+    return relative ? `/${relative}` : CLAUDE_LOCAL_SETTINGS_GITIGNORE_RULE;
 }
 
 function toProjectRelativePath(projectRoot: string | undefined, targetPath: string | undefined): string | undefined {

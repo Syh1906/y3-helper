@@ -13,16 +13,48 @@ import {
     createClaudeMcpJson,
     createClaudeSettingsJson,
     createCodexConfigToml,
+    createLegacyScriptAgentsMarkdown,
     createRootAgentsMarkdown,
     createScriptAgentsMarkdown,
-    createY3MakerMcpSettingsJson,
+    hasClaudeSettingsJsonConflict,
+    readAiMcpProjectConfigState,
     hasCodexY3HelperMcpConflict,
     hasClaudeY3HelperMcpConflict,
-    hasY3MakerMcpSettingsConflict,
     isManagedAiDevEnvironmentFile,
     normalizeRelativeLink,
 } from '../../aiDevEnvironment';
 import { MCP_ENDPOINT } from '../../mcp/agentContext';
+
+function createLegacyY3MakerMcpSettingsJson(disabled: boolean): string {
+    return `${JSON.stringify({
+        mcpServers: {
+            'y3-helper': {
+                type: 'streamableHttp',
+                url: 'http://127.0.0.1:8766/mcp',
+                headers: {},
+                timeout: 60,
+                autoApprove: true,
+                disabled,
+            },
+            y3editor: {
+                type: 'streamableHttp',
+                url: 'http://127.0.0.1:8765/mcp',
+                headers: {},
+                timeout: 60,
+                autoApprove: true,
+                disabled,
+            },
+            y3runtime: {
+                type: 'streamableHttp',
+                url: 'http://127.0.0.1:8767/mcp',
+                headers: {},
+                timeout: 60,
+                autoApprove: true,
+                disabled,
+            },
+        },
+    }, null, 2)}\n`;
+}
 
 suite('AI development environment', () => {
     const snapshot = {
@@ -39,6 +71,8 @@ suite('AI development environment', () => {
         const markdown = createRootAgentsMarkdown(snapshot);
 
         assert.ok(markdown.includes(AI_DEV_ENV_MARKER));
+        assert.ok(markdown.includes('Y3_HELPER_AI_DEV_ENV:BEGIN'));
+        assert.ok(markdown.includes('Y3_HELPER_AI_DEV_ENV:END'));
         assert.ok(markdown.includes('地图工程模块路由'));
         assert.ok(markdown.includes('常见任务入口'));
         assert.ok(markdown.includes('maps/EntryMap/script'));
@@ -64,6 +98,8 @@ suite('AI development environment', () => {
     test('creates script AGENTS.md for Lua business work', () => {
         const markdown = createScriptAgentsMarkdown(snapshot);
 
+        assert.ok(markdown.includes('Y3_HELPER_AI_DEV_ENV:BEGIN'));
+        assert.ok(markdown.includes('Y3_HELPER_AI_DEV_ENV:END'));
         assert.ok(markdown.includes('Lua 业务开发'));
         assert.ok(markdown.includes('maps/EntryMap/script'));
         assert.ok(markdown.includes('地图工程根目录'));
@@ -110,6 +146,11 @@ suite('AI development environment', () => {
         assert.strictEqual(plan.claudeSkillLink, 'E:/Maps/Y3_Helper_test01/.claude/skills/y3-kernel-navigator');
         assert.strictEqual(plan.codexConfigPath, 'E:/Maps/Y3_Helper_test01/.codex/config.toml');
         assert.strictEqual(plan.claudeMcpPath, 'E:/Maps/Y3_Helper_test01/.mcp.json');
+        assert.strictEqual(plan.scriptCodexConfigLink, 'E:/Maps/Y3_Helper_test01/maps/EntryMap/script/.codex/config.toml');
+        assert.strictEqual(plan.scriptClaudeMcpLink, 'E:/Maps/Y3_Helper_test01/maps/EntryMap/script/.mcp.json');
+        assert.strictEqual(plan.scriptClaudeSettingsLink, 'E:/Maps/Y3_Helper_test01/maps/EntryMap/script/.claude/settings.local.json');
+        assert.strictEqual(plan.scriptCodexSkillLink, 'E:/Maps/Y3_Helper_test01/maps/EntryMap/script/.codex/skills/y3-kernel-navigator');
+        assert.strictEqual(plan.scriptClaudeSkillLink, 'E:/Maps/Y3_Helper_test01/maps/EntryMap/script/.claude/skills/y3-kernel-navigator');
     });
 
     test('builds default plan paths even when kernel skill has not been initialized yet', () => {
@@ -117,16 +158,7 @@ suite('AI development environment', () => {
 
         assert.strictEqual(plan.codexSkillSource, undefined);
         assert.strictEqual(plan.codexSkillTarget, 'E:/Maps/Y3_Helper_test01/.codex/skills/y3-kernel-navigator');
-        assert.strictEqual(plan.y3MakerMcpSettingsPath, 'E:/Maps/Y3_Helper_test01/.y3maker/mcp_settings.json');
-    });
-
-    test('allows Y3-Helper McpHub settings to follow the opened workspace folder', () => {
-        const plan = buildAiDevEnvironmentPlan({
-            ...snapshot,
-            y3MakerConfigRoot: 'E:/Maps/Y3_Helper_test01/maps/EntryMap/script',
-        });
-
-        assert.strictEqual(plan.y3MakerMcpSettingsPath, 'E:/Maps/Y3_Helper_test01/maps/EntryMap/script/.y3maker/mcp_settings.json');
+        assert.strictEqual('y3MakerMcpSettingsPath' in plan, false);
     });
 
     test('creates Codex MCP config for y3-helper, y3editor, and y3runtime', () => {
@@ -157,18 +189,6 @@ suite('AI development environment', () => {
         assert.strictEqual(parsed.mcpServers['y3-helper'].url, 'http://127.0.0.1:8766/mcp');
         assert.strictEqual(parsed.mcpServers.y3editor.url, 'http://127.0.0.1:8765/mcp');
         assert.strictEqual(parsed.mcpServers.y3runtime.url, 'http://127.0.0.1:8767/mcp');
-    });
-
-    test('creates Y3-Helper McpHub settings without restoring the chat UI surface', () => {
-        const json = createY3MakerMcpSettingsJson('', true);
-        const parsed = JSON.parse(json);
-
-        assert.deepStrictEqual(Object.keys(parsed.mcpServers), ['y3-helper', 'y3editor', 'y3runtime']);
-        assert.strictEqual(parsed.mcpServers['y3-helper'].type, 'streamableHttp');
-        assert.strictEqual(parsed.mcpServers['y3-helper'].url, 'http://127.0.0.1:8766/mcp');
-        assert.strictEqual(parsed.mcpServers.y3editor.url, 'http://127.0.0.1:8765/mcp');
-        assert.strictEqual(parsed.mcpServers.y3runtime.url, 'http://127.0.0.1:8767/mcp');
-        assert.strictEqual(JSON.stringify(parsed).includes('CodeMaker'), false);
     });
 
     test('creates Claude settings that can disable three Y3 MCP tools while preserving other disabled servers', () => {
@@ -216,6 +236,22 @@ suite('AI development environment', () => {
         assert.strictEqual(hasCodexY3HelperMcpConflict(existing), false);
     });
 
+    test('preserves custom Codex MCP fields while toggling managed Y3 server fields', () => {
+        const existing = [
+            '[mcp_servers.y3-helper]',
+            'url = "http://127.0.0.1:8766/mcp"',
+            'enabled = true',
+            'custom_flag = "keep"',
+            '',
+        ].join('\n');
+
+        const updated = createCodexConfigToml(existing, false);
+
+        assert.ok(updated.includes('enabled = false'));
+        assert.ok(updated.includes('custom_flag = "keep"'));
+        assert.strictEqual((updated.match(/\[mcp_servers\.y3-helper\]/g) ?? []).length, 1);
+    });
+
     test('detects existing Claude y3-helper MCP config with a different URL as conflict', () => {
         const existing = JSON.stringify({
             mcpServers: {
@@ -230,6 +266,28 @@ suite('AI development environment', () => {
         assert.strictEqual(hasClaudeY3HelperMcpConflict(createClaudeMcpJson('', true)), false);
     });
 
+    test('preserves custom Claude MCP fields while toggling managed Y3 server fields', () => {
+        const existing = JSON.stringify({
+            mcpServers: {
+                'y3-helper': {
+                    type: 'http',
+                    url: 'http://127.0.0.1:8766/mcp',
+                    headers: {
+                        'x-custom': 'keep',
+                    },
+                    note: 'keep me',
+                    disabled: false,
+                },
+            },
+        });
+
+        const parsed = JSON.parse(createClaudeMcpJson(existing, false));
+
+        assert.strictEqual(parsed.mcpServers['y3-helper'].disabled, true);
+        assert.strictEqual(parsed.mcpServers['y3-helper'].note, 'keep me');
+        assert.deepStrictEqual(parsed.mcpServers['y3-helper'].headers, { 'x-custom': 'keep' });
+    });
+
     test('detects incomplete existing Claude y3-helper MCP config as conflict', () => {
         const existing = JSON.stringify({
             mcpServers: {
@@ -242,7 +300,7 @@ suite('AI development environment', () => {
         assert.strictEqual(hasClaudeY3HelperMcpConflict(existing), true);
     });
 
-    test('detects existing y3editor and y3runtime MCP URL conflicts', () => {
+    test('detects existing Codex and Claude MCP URL conflicts', () => {
         assert.strictEqual(hasCodexY3HelperMcpConflict([
             '[mcp_servers.y3runtime]',
             'url = "http://127.0.0.1:9999/mcp"',
@@ -255,15 +313,6 @@ suite('AI development environment', () => {
                 },
             },
         })), true);
-
-        assert.strictEqual(hasY3MakerMcpSettingsConflict(JSON.stringify({
-            mcpServers: {
-                y3runtime: {
-                    url: 'http://127.0.0.1:9999/mcp',
-                },
-            },
-        })), true);
-        assert.strictEqual(hasY3MakerMcpSettingsConflict(createY3MakerMcpSettingsJson('', true)), false);
     });
 
     test('reports malformed JSON MCP files as conflicts without writing outputs', async () => {
@@ -301,6 +350,88 @@ suite('AI development environment', () => {
         assert.strictEqual(isManagedAiDevEnvironmentFile(''), false);
     });
 
+    test('reports malformed Claude local settings as conflicts before writing MCP outputs', async () => {
+        const root = await fs.mkdtemp(path.join(os.tmpdir(), 'y3-helper-ai-bad-settings-'));
+        try {
+            const input = {
+                projectRoot: root,
+                scriptRoot: path.join(root, 'maps', 'EntryMap', 'script'),
+                currentMapName: 'EntryMap',
+            };
+            const plan = buildAiDevEnvironmentPlan(input);
+            await fs.mkdir(path.dirname(plan.codexConfigPath), { recursive: true });
+            await fs.mkdir(path.dirname(plan.claudeMcpPath), { recursive: true });
+            await fs.mkdir(path.dirname(plan.claudeSettingsPath), { recursive: true });
+            await fs.writeFile(plan.codexConfigPath, createCodexConfigToml('', true), 'utf8');
+            await fs.writeFile(plan.claudeMcpPath, createClaudeMcpJson('', true), 'utf8');
+            await fs.writeFile(plan.claudeSettingsPath, '{ bad json', 'utf8');
+            const beforeCodex = await fs.readFile(plan.codexConfigPath, 'utf8');
+            const beforeClaudeMcp = await fs.readFile(plan.claudeMcpPath, 'utf8');
+
+            const result = await inspectAiDevEnvironment(input);
+
+            assert.ok(result.conflicts.includes(plan.claudeSettingsPath));
+            assert.strictEqual(hasClaudeSettingsJsonConflict('{}'), false);
+            assert.throws(() => hasClaudeSettingsJsonConflict('{ bad json'));
+            await assert.rejects(() => setAiMcpProjectConfigEnabled(input, false), /存在同名但地址不同/);
+            assert.strictEqual(await fs.readFile(plan.codexConfigPath, 'utf8'), beforeCodex);
+            assert.strictEqual(await fs.readFile(plan.claudeMcpPath, 'utf8'), beforeClaudeMcp);
+            assert.strictEqual(await fs.readFile(plan.claudeSettingsPath, 'utf8'), '{ bad json');
+        } finally {
+            await fs.rm(root, { recursive: true, force: true });
+        }
+    });
+
+    test('keeps user extensions outside managed AGENTS blocks during repair', async () => {
+        const root = await fs.mkdtemp(path.join(os.tmpdir(), 'y3-helper-ai-user-extended-'));
+        try {
+            const input = {
+                projectRoot: root,
+                scriptRoot: path.join(root, 'maps', 'EntryMap', 'script'),
+                currentMapName: 'EntryMap',
+            };
+            const plan = buildAiDevEnvironmentPlan(input);
+            await applyAiDevEnvironment(input);
+            await fs.appendFile(plan.scriptAgentsPath, '\n## 用户扩展\n\n- 保留我的项目约定。\n', 'utf8');
+
+            const result = await inspectAiDevEnvironment(input);
+            assert.strictEqual(result.conflicts.includes(plan.scriptAgentsPath), false);
+
+            await applyAiDevEnvironment(input);
+
+            assert.ok((await fs.readFile(plan.scriptAgentsPath, 'utf8')).includes('保留我的项目约定'));
+        } finally {
+            await fs.rm(root, { recursive: true, force: true });
+        }
+    });
+
+    test('upgrades legacy generated AGENTS files with appended user content into managed blocks', async () => {
+        const root = await fs.mkdtemp(path.join(os.tmpdir(), 'y3-helper-ai-legacy-append-'));
+        try {
+            const input = {
+                projectRoot: root,
+                scriptRoot: path.join(root, 'maps', 'EntryMap', 'script'),
+                currentMapName: 'EntryMap',
+            };
+            const plan = buildAiDevEnvironmentPlan(input);
+            await fs.mkdir(path.dirname(plan.scriptAgentsPath), { recursive: true });
+            const legacy = `${createLegacyScriptAgentsMarkdown(input)}\n\n## 用户扩展\n\n- 保留旧版追加内容。\n`;
+            await fs.writeFile(plan.scriptAgentsPath, legacy, 'utf8');
+
+            const result = await inspectAiDevEnvironment(input);
+            assert.strictEqual(result.conflicts.includes(plan.scriptAgentsPath), false);
+
+            await applyAiDevEnvironment(input);
+            const updated = await fs.readFile(plan.scriptAgentsPath, 'utf8');
+
+            assert.ok(updated.includes('Y3_HELPER_AI_DEV_ENV:BEGIN'));
+            assert.ok(updated.includes('Y3_HELPER_AI_DEV_ENV:END'));
+            assert.ok(updated.includes('保留旧版追加内容'));
+        } finally {
+            await fs.rm(root, { recursive: true, force: true });
+        }
+    });
+
     test('toggles MCP project config without requiring an existing skill source', async () => {
         const root = await fs.mkdtemp(path.join(os.tmpdir(), 'y3-helper-ai-mcp-'));
         try {
@@ -315,18 +446,37 @@ suite('AI development environment', () => {
 
             await setAiMcpProjectConfigEnabled(input, false);
 
-            assert.ok((await fs.readFile(plan.codexConfigPath, 'utf8')).includes('enabled = false'));
+            const codexConfig = await fs.readFile(plan.codexConfigPath, 'utf8');
+            assert.strictEqual((codexConfig.match(/enabled = false/g) ?? []).length, 3);
+            const claudeMcp = JSON.parse(await fs.readFile(plan.claudeMcpPath, 'utf8'));
+            assert.strictEqual(claudeMcp.mcpServers['y3-helper'].disabled, true);
+            assert.strictEqual(claudeMcp.mcpServers.y3editor.disabled, true);
+            assert.strictEqual(claudeMcp.mcpServers.y3runtime.disabled, true);
             const settings = JSON.parse(await fs.readFile(plan.claudeSettingsPath, 'utf8'));
             assert.deepStrictEqual(settings.disabledMcpjsonServers.sort(), ['y3-helper', 'y3editor', 'y3runtime']);
+            assert.deepStrictEqual(readAiMcpProjectConfigState({
+                codexConfigContent: codexConfig,
+                claudeMcpContent: JSON.stringify(claudeMcp),
+                claudeSettingsContent: JSON.stringify(settings),
+            }), {
+                codexEnabled: false,
+                claudeMcpEnabled: false,
+                claudeSettingsEnabled: false,
+            });
 
             await setAiMcpProjectConfigEnabled(input, true);
 
-            assert.ok((await fs.readFile(plan.codexConfigPath, 'utf8')).includes('enabled = true'));
+            const enabledCodexConfig = await fs.readFile(plan.codexConfigPath, 'utf8');
+            assert.strictEqual((enabledCodexConfig.match(/enabled = true/g) ?? []).length, 3);
+            const enabledClaudeMcp = JSON.parse(await fs.readFile(plan.claudeMcpPath, 'utf8'));
+            assert.strictEqual(enabledClaudeMcp.mcpServers['y3-helper'].disabled, false);
+            assert.strictEqual(enabledClaudeMcp.mcpServers.y3editor.disabled, false);
+            assert.strictEqual(enabledClaudeMcp.mcpServers.y3runtime.disabled, false);
             const enabledSettings = JSON.parse(await fs.readFile(plan.claudeSettingsPath, 'utf8'));
             assert.deepStrictEqual(enabledSettings.enabledMcpjsonServers.sort(), ['y3-helper', 'y3editor', 'y3runtime']);
             assert.deepStrictEqual(enabledSettings.disabledMcpjsonServers, []);
-            const y3MakerSettings = JSON.parse(await fs.readFile(plan.y3MakerMcpSettingsPath, 'utf8'));
-            assert.strictEqual(y3MakerSettings.mcpServers.y3runtime.disabled, false);
+            await assert.rejects(() => fs.stat(path.join(root, '.y3maker', 'mcp_settings.json')), { code: 'ENOENT' });
+            await assert.rejects(() => fs.stat(path.join(scriptRoot, '.y3maker', 'mcp_settings.json')), { code: 'ENOENT' });
         } finally {
             await fs.rm(root, { recursive: true, force: true });
         }
@@ -350,8 +500,83 @@ suite('AI development environment', () => {
             assert.ok((await fs.readFile(plan.rootAgentsPath, 'utf8')).includes(AI_DEV_ENV_MARKER));
             assert.ok((await fs.readFile(plan.scriptAgentsPath, 'utf8')).includes(AI_DEV_ENV_MARKER));
             assert.ok((await fs.readFile(plan.codexConfigPath, 'utf8')).includes('[mcp_servers.y3runtime]'));
-            assert.ok((await fs.readFile(plan.y3MakerMcpSettingsPath, 'utf8')).includes('y3editor'));
             await assert.rejects(() => fs.stat(plan.codexSkillTarget), { code: 'ENOENT' });
+            await assert.rejects(() => fs.stat(path.join(root, '.y3maker', 'mcp_settings.json')), { code: 'ENOENT' });
+        } finally {
+            await fs.rm(root, { recursive: true, force: true });
+        }
+    });
+
+    test('links script workspace MCP config files back to the project root', async () => {
+        const root = await fs.mkdtemp(path.join(os.tmpdir(), 'y3-helper-ai-script-links-'));
+        try {
+            const skillSourceRoot = path.join(root, 'skill-source');
+            const input = {
+                projectRoot: root,
+                scriptRoot: path.join(root, 'maps', 'EntryMap', 'script'),
+                currentMapName: 'EntryMap',
+                skillSourceRoot,
+            };
+            await fs.mkdir(skillSourceRoot, { recursive: true });
+            await fs.writeFile(path.join(skillSourceRoot, 'SKILL.md'), '---\nname: y3-kernel-navigator\n---\n', 'utf8');
+            const plan = buildAiDevEnvironmentPlan(input);
+
+            await applyAiDevEnvironment(input);
+
+            assert.strictEqual((await fs.lstat(plan.scriptCodexConfigLink)).isSymbolicLink(), true);
+            assert.strictEqual((await fs.lstat(plan.scriptClaudeMcpLink)).isSymbolicLink(), true);
+            assert.strictEqual((await fs.lstat(plan.scriptClaudeSettingsLink)).isSymbolicLink(), true);
+            assert.strictEqual((await fs.lstat(plan.scriptCodexSkillLink)).isSymbolicLink(), true);
+            assert.strictEqual((await fs.lstat(plan.scriptClaudeSkillLink)).isSymbolicLink(), true);
+            assert.strictEqual(
+                normalizeRelativeLink(plan.scriptCodexConfigLink, plan.codexConfigPath),
+                (await fs.readlink(plan.scriptCodexConfigLink)).replace(/\\/g, '/'),
+            );
+            assert.strictEqual(
+                normalizeRelativeLink(plan.scriptClaudeMcpLink, plan.claudeMcpPath),
+                (await fs.readlink(plan.scriptClaudeMcpLink)).replace(/\\/g, '/'),
+            );
+        } finally {
+            await fs.rm(root, { recursive: true, force: true });
+        }
+    });
+
+    test('removes obsolete Y3-Helper McpHub settings only when they match the legacy generated shape', async () => {
+        const root = await fs.mkdtemp(path.join(os.tmpdir(), 'y3-helper-ai-y3maker-cleanup-'));
+        try {
+            const scriptRoot = path.join(root, 'maps', 'EntryMap', 'script');
+            const input = {
+                projectRoot: root,
+                scriptRoot,
+                currentMapName: 'EntryMap',
+            };
+            const rootLegacyPath = path.join(root, '.y3maker', 'mcp_settings.json');
+            const scriptLegacyPath = path.join(scriptRoot, '.y3maker', 'mcp_settings.json');
+            await fs.mkdir(path.dirname(rootLegacyPath), { recursive: true });
+            await fs.mkdir(path.dirname(scriptLegacyPath), { recursive: true });
+            await fs.writeFile(rootLegacyPath, createLegacyY3MakerMcpSettingsJson(false), 'utf8');
+            await fs.writeFile(scriptLegacyPath, createLegacyY3MakerMcpSettingsJson(true), 'utf8');
+
+            await applyAiDevEnvironment(input);
+
+            await assert.rejects(() => fs.stat(rootLegacyPath), { code: 'ENOENT' });
+            await assert.rejects(() => fs.stat(scriptLegacyPath), { code: 'ENOENT' });
+
+            await fs.writeFile(scriptLegacyPath, JSON.stringify({
+                mcpServers: {
+                    custom: {
+                        type: 'streamableHttp',
+                        url: 'http://127.0.0.1:9999/mcp',
+                    },
+                },
+            }, null, 2), 'utf8');
+
+            const result = await inspectAiDevEnvironment(input);
+
+            assert.ok(result.conflicts.includes(scriptLegacyPath));
+            await assert.rejects(() => applyAiDevEnvironment(input), /存在用户自定义 AI 配置文件/);
+            await assert.rejects(() => setAiMcpProjectConfigEnabled(input, false), /存在同名但地址不同/);
+            assert.ok((await fs.readFile(scriptLegacyPath, 'utf8')).includes('custom'));
         } finally {
             await fs.rm(root, { recursive: true, force: true });
         }
@@ -372,9 +597,12 @@ suite('AI development environment', () => {
             await setAiMcpProjectConfigEnabled(input, false);
 
             const gitignore = await fs.readFile(path.join(root, '.gitignore'), 'utf8');
+            const gitignoreLines = gitignore.split(/\r?\n/);
             assert.ok(gitignore.includes('# existing'));
             assert.ok(gitignore.includes('*.log'));
-            assert.strictEqual((gitignore.match(/\/\.claude\/settings\.local\.json/g) ?? []).length, 1);
+            assert.strictEqual(gitignoreLines.filter((line) => line === '/.claude/settings.local.json').length, 1);
+            assert.strictEqual(gitignoreLines.filter((line) => line === '/maps/EntryMap/script/.claude/settings.local.json').length, 1);
+            assert.ok(gitignore.includes('/maps/EntryMap/script/.claude/settings.local.json'));
         } finally {
             await fs.rm(root, { recursive: true, force: true });
         }
@@ -403,6 +631,8 @@ suite('AI development environment', () => {
             assert.strictEqual(synced.skillStatus, 'synced');
             assert.ok((await fs.readFile(path.join(plan.codexSkillTarget, 'SKILL.md'), 'utf8')).includes('y3-kernel-navigator'));
             assert.ok((await fs.lstat(plan.claudeSkillLink)).isSymbolicLink());
+            assert.ok((await fs.lstat(plan.scriptCodexSkillLink)).isSymbolicLink());
+            assert.ok((await fs.lstat(plan.scriptClaudeSkillLink)).isSymbolicLink());
         } finally {
             await fs.rm(root, { recursive: true, force: true });
         }
@@ -430,6 +660,32 @@ suite('AI development environment', () => {
             const result = await inspectAiDevEnvironment(input);
 
             assert.ok(result.conflicts.includes(plan.rootClaudePath));
+        } finally {
+            await fs.rm(root, { recursive: true, force: true });
+        }
+    });
+
+    test('does not overwrite script config links when toggling MCP project config', async () => {
+        const root = await fs.mkdtemp(path.join(os.tmpdir(), 'y3-helper-ai-toggle-link-'));
+        try {
+            const scriptRoot = path.join(root, 'maps', 'EntryMap', 'script');
+            const input = {
+                projectRoot: root,
+                scriptRoot,
+                currentMapName: 'EntryMap',
+            };
+            const plan = buildAiDevEnvironmentPlan(input);
+            const customMcpJson = path.join(root, 'custom-mcp.json');
+            await fs.mkdir(path.dirname(plan.scriptClaudeMcpLink), { recursive: true });
+            await fs.writeFile(customMcpJson, '{}\n', 'utf8');
+            await fs.symlink(path.relative(path.dirname(plan.scriptClaudeMcpLink), customMcpJson), plan.scriptClaudeMcpLink, 'file');
+
+            await assert.rejects(() => setAiMcpProjectConfigEnabled(input, false), /存在同名但地址不同/);
+
+            assert.strictEqual(
+                path.resolve(path.dirname(plan.scriptClaudeMcpLink), await fs.readlink(plan.scriptClaudeMcpLink)),
+                customMcpJson,
+            );
         } finally {
             await fs.rm(root, { recursive: true, force: true });
         }

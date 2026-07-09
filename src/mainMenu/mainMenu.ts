@@ -12,7 +12,6 @@ import { 插件列表 } from './pages/plugin';
 import { 地图管理 } from './pages/mapManager';
 import { 跳字 } from './pages/jumpword';
 import { 字体 } from './pages/font';
-import { Agent接入中心 } from './pages/agentAccessCenter';
 import * as l10n from '@vscode/l10n';
 
 
@@ -38,7 +37,6 @@ function makeMainNode() {
                 ]
             }),
             new 环境,
-            new Agent接入中心,
             new TreeNode(l10n.t('重新选择Y3地图路径'), {
                 command: {
                     command: 'y3-helper.selectAnotherMap',

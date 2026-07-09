@@ -6,13 +6,15 @@ import {
     createClaudeMcpJson,
     createClaudeSettingsJson,
     createCodexConfigToml,
+    createLegacyRootAgentsMarkdown,
+    createLegacyScriptAgentsMarkdown,
     createRootAgentsMarkdown,
     createScriptAgentsMarkdown,
-    createY3MakerMcpSettingsJson,
     hasClaudeY3HelperMcpConflict,
+    hasClaudeSettingsJsonConflict,
     hasCodexY3HelperMcpConflict,
-    hasY3MakerMcpSettingsConflict,
-    isManagedAiDevEnvironmentFile,
+    isObsoleteY3MakerMcpSettingsJson,
+    mergeManagedAiDevEnvironmentFile,
     mergeAiDevEnvironmentGitignore,
     normalizeRelativeLink,
     type AiDevEnvironmentPlan,
@@ -31,36 +33,59 @@ export interface AiDevEnvironmentApplyOutput extends AiDevEnvironmentPlan {
     skillStatus: 'synced' | 'skipped';
 }
 
+const LEGACY_Y3MAKER_MCP_SETTINGS_RELATIVE_PATH = ['.y3maker', 'mcp_settings.json'];
+
+interface AiMcpProjectConfigContent {
+    codexConfig: string;
+    claudeMcp: string;
+    claudeSettings: string;
+}
+
 export async function inspectAiDevEnvironment(input: AiDevEnvironmentApplyInput): Promise<AiDevEnvironmentApplyResult> {
     const plan = buildAiDevEnvironmentPlan(input);
     return {
         plan,
-        conflicts: await findAiDevEnvironmentConflicts(plan),
+        conflicts: await findAiDevEnvironmentConflicts(plan, input),
     };
 }
 
 export async function applyAiDevEnvironment(input: AiDevEnvironmentApplyInput): Promise<AiDevEnvironmentApplyOutput> {
     const plan = buildAiDevEnvironmentPlan(input);
-    const conflicts = await findAiDevEnvironmentConflicts(plan);
+    const conflicts = await findAiDevEnvironmentConflicts(plan, input);
     if (conflicts.length > 0) {
         throw new Error(l10n.t('存在用户自定义 AI 配置文件，已停止以避免覆盖。'));
     }
 
     const snapshot: AiDevEnvironmentSnapshot = input;
-    await writeManagedFile(plan.rootAgentsPath, createRootAgentsMarkdown(snapshot));
-    await writeManagedFile(plan.scriptAgentsPath, createScriptAgentsMarkdown(snapshot));
+    const mcpConfigContent = await createAiMcpProjectConfigContent(plan, true);
+    await removeObsoleteY3MakerMcpSettings(plan);
+    await writeManagedFile(
+        plan.rootAgentsPath,
+        createRootAgentsMarkdown(snapshot),
+        createLegacyRootAgentsMarkdown(snapshot),
+    );
+    await writeManagedFile(
+        plan.scriptAgentsPath,
+        createScriptAgentsMarkdown(snapshot),
+        createLegacyScriptAgentsMarkdown(snapshot),
+    );
     await createRelativeSymlink(plan.rootClaudePath, plan.rootAgentsPath, 'file');
     await createRelativeSymlink(plan.scriptClaudePath, plan.scriptAgentsPath, 'file');
-    await writeText(plan.gitignorePath, mergeAiDevEnvironmentGitignore(await readTextIfExists(plan.gitignorePath) ?? ''));
-    await writeText(plan.codexConfigPath, createCodexConfigToml(await readTextIfExists(plan.codexConfigPath) ?? '', true));
-    await writeText(plan.claudeMcpPath, createClaudeMcpJson(await readTextIfExists(plan.claudeMcpPath) ?? '', true));
-    await writeText(plan.claudeSettingsPath, createClaudeSettingsJson(await readTextIfExists(plan.claudeSettingsPath) ?? '', true));
-    await writeText(plan.y3MakerMcpSettingsPath, createY3MakerMcpSettingsJson(await readTextIfExists(plan.y3MakerMcpSettingsPath) ?? '', true));
+    await writeText(plan.gitignorePath, mergeAiDevEnvironmentGitignore(
+        await readTextIfExists(plan.gitignorePath) ?? '',
+        [plan.scriptClaudeSettingsGitignoreRule],
+    ));
+    await writeAiMcpProjectConfig(plan, mcpConfigContent);
+    await createRelativeSymlink(plan.scriptCodexConfigLink, plan.codexConfigPath, 'file');
+    await createRelativeSymlink(plan.scriptClaudeMcpLink, plan.claudeMcpPath, 'file');
+    await createRelativeSymlink(plan.scriptClaudeSettingsLink, plan.claudeSettingsPath, 'file');
 
     let skillStatus: AiDevEnvironmentApplyOutput['skillStatus'] = 'skipped';
     if (plan.codexSkillSource && await directoryExists(plan.codexSkillSource)) {
         await copyDirectory(plan.codexSkillSource, plan.codexSkillTarget);
         await createRelativeSymlink(plan.claudeSkillLink, plan.codexSkillTarget, 'dir');
+        await createRelativeSymlink(plan.scriptCodexSkillLink, plan.codexSkillTarget, 'dir');
+        await createRelativeSymlink(plan.scriptClaudeSkillLink, plan.claudeSkillLink, 'dir');
         skillStatus = 'synced';
     }
     return {
@@ -71,26 +96,63 @@ export async function applyAiDevEnvironment(input: AiDevEnvironmentApplyInput): 
 
 export async function setAiMcpProjectConfigEnabled(input: AiDevEnvironmentApplyInput, enabled: boolean): Promise<AiDevEnvironmentPlan> {
     const plan = buildAiDevEnvironmentPlan(input);
-    const conflicts = await findMcpConfigConflicts(plan);
+    const conflicts = [
+        ...await findObsoleteY3MakerMcpSettingsConflicts(plan),
+        ...await findScriptConfigLinkConflicts(plan),
+        ...await findMcpConfigConflicts(plan),
+    ];
     if (conflicts.length > 0) {
         throw new Error(l10n.t('存在同名但地址不同的 y3-helper MCP 配置，已停止以避免覆盖。'));
     }
-    await writeText(plan.gitignorePath, mergeAiDevEnvironmentGitignore(await readTextIfExists(plan.gitignorePath) ?? ''));
-    await writeText(plan.codexConfigPath, createCodexConfigToml(await readTextIfExists(plan.codexConfigPath) ?? '', enabled));
-    await writeText(plan.claudeMcpPath, createClaudeMcpJson(await readTextIfExists(plan.claudeMcpPath) ?? '', enabled));
-    await writeText(plan.claudeSettingsPath, createClaudeSettingsJson(await readTextIfExists(plan.claudeSettingsPath) ?? '', enabled));
-    await writeText(plan.y3MakerMcpSettingsPath, createY3MakerMcpSettingsJson(await readTextIfExists(plan.y3MakerMcpSettingsPath) ?? '', enabled));
+    const mcpConfigContent = await createAiMcpProjectConfigContent(plan, enabled);
+    await removeObsoleteY3MakerMcpSettings(plan);
+    await writeText(plan.gitignorePath, mergeAiDevEnvironmentGitignore(
+        await readTextIfExists(plan.gitignorePath) ?? '',
+        [plan.scriptClaudeSettingsGitignoreRule],
+    ));
+    await writeAiMcpProjectConfig(plan, mcpConfigContent);
+    await createRelativeSymlink(plan.scriptCodexConfigLink, plan.codexConfigPath, 'file');
+    await createRelativeSymlink(plan.scriptClaudeMcpLink, plan.claudeMcpPath, 'file');
+    await createRelativeSymlink(plan.scriptClaudeSettingsLink, plan.claudeSettingsPath, 'file');
     return plan;
 }
 
-async function findAiDevEnvironmentConflicts(plan: AiDevEnvironmentPlan): Promise<string[]> {
+async function createAiMcpProjectConfigContent(plan: AiDevEnvironmentPlan, enabled: boolean): Promise<AiMcpProjectConfigContent> {
+    return {
+        codexConfig: createCodexConfigToml(await readTextIfExists(plan.codexConfigPath) ?? '', enabled),
+        claudeMcp: createClaudeMcpJson(await readTextIfExists(plan.claudeMcpPath) ?? '', enabled),
+        claudeSettings: createClaudeSettingsJson(await readTextIfExists(plan.claudeSettingsPath) ?? '', enabled),
+    };
+}
+
+async function writeAiMcpProjectConfig(plan: AiDevEnvironmentPlan, content: AiMcpProjectConfigContent): Promise<void> {
+    await writeText(plan.codexConfigPath, content.codexConfig);
+    await writeText(plan.claudeMcpPath, content.claudeMcp);
+    await writeText(plan.claudeSettingsPath, content.claudeSettings);
+}
+
+async function findAiDevEnvironmentConflicts(plan: AiDevEnvironmentPlan, snapshot: AiDevEnvironmentSnapshot): Promise<string[]> {
     const conflicts: string[] = [];
-    await collectManagedFileConflict(plan.rootAgentsPath, conflicts);
-    await collectManagedFileConflict(plan.scriptAgentsPath, conflicts);
+    await collectObsoleteY3MakerMcpSettingsConflict(plan, conflicts);
+    await collectManagedFileConflict(
+        plan.rootAgentsPath,
+        createRootAgentsMarkdown(snapshot),
+        createLegacyRootAgentsMarkdown(snapshot),
+        conflicts,
+    );
+    await collectManagedFileConflict(
+        plan.scriptAgentsPath,
+        createScriptAgentsMarkdown(snapshot),
+        createLegacyScriptAgentsMarkdown(snapshot),
+        conflicts,
+    );
     await collectLinkConflict(plan.rootClaudePath, plan.rootAgentsPath, conflicts);
     await collectLinkConflict(plan.scriptClaudePath, plan.scriptAgentsPath, conflicts);
+    conflicts.push(...await findScriptConfigLinkConflicts(plan));
     if (plan.codexSkillSource && await directoryExists(plan.codexSkillSource)) {
         await collectLinkConflict(plan.claudeSkillLink, plan.codexSkillTarget, conflicts);
+        await collectLinkConflict(plan.scriptCodexSkillLink, plan.codexSkillTarget, conflicts);
+        await collectLinkConflict(plan.scriptClaudeSkillLink, plan.claudeSkillLink, conflicts);
         await collectManagedDirectoryConflict(plan.codexSkillTarget, conflicts);
     }
     conflicts.push(...await findMcpConfigConflicts(plan));
@@ -107,11 +169,71 @@ async function findMcpConfigConflicts(plan: AiDevEnvironmentPlan): Promise<strin
     if (claudeMcp !== undefined && hasJsonConfigConflict(claudeMcp, hasClaudeY3HelperMcpConflict)) {
         conflicts.push(plan.claudeMcpPath);
     }
-    const y3MakerMcpSettings = await readTextIfExists(plan.y3MakerMcpSettingsPath);
-    if (y3MakerMcpSettings !== undefined && hasJsonConfigConflict(y3MakerMcpSettings, hasY3MakerMcpSettingsConflict)) {
-        conflicts.push(plan.y3MakerMcpSettingsPath);
+    const claudeSettings = await readTextIfExists(plan.claudeSettingsPath);
+    if (claudeSettings !== undefined && hasJsonConfigConflict(claudeSettings, hasClaudeSettingsJsonConflict)) {
+        conflicts.push(plan.claudeSettingsPath);
     }
     return conflicts;
+}
+
+async function findScriptConfigLinkConflicts(plan: AiDevEnvironmentPlan): Promise<string[]> {
+    const conflicts: string[] = [];
+    await collectLinkConflict(plan.scriptCodexConfigLink, plan.codexConfigPath, conflicts);
+    await collectLinkConflict(plan.scriptClaudeMcpLink, plan.claudeMcpPath, conflicts);
+    await collectLinkConflict(plan.scriptClaudeSettingsLink, plan.claudeSettingsPath, conflicts);
+    return conflicts;
+}
+
+async function collectObsoleteY3MakerMcpSettingsConflict(plan: AiDevEnvironmentPlan, conflicts: string[]): Promise<void> {
+    conflicts.push(...await findObsoleteY3MakerMcpSettingsConflicts(plan));
+}
+
+async function findObsoleteY3MakerMcpSettingsConflicts(plan: AiDevEnvironmentPlan): Promise<string[]> {
+    const conflicts: string[] = [];
+    for (const filePath of legacyY3MakerMcpSettingsPaths(plan)) {
+        const content = await readTextIfExists(filePath);
+        if (content !== undefined && !isObsoleteY3MakerMcpSettings(content)) {
+            conflicts.push(filePath);
+        }
+    }
+    return conflicts;
+}
+
+async function removeObsoleteY3MakerMcpSettings(plan: AiDevEnvironmentPlan): Promise<void> {
+    for (const filePath of legacyY3MakerMcpSettingsPaths(plan)) {
+        const content = await readTextIfExists(filePath);
+        if (content !== undefined && isObsoleteY3MakerMcpSettingsJson(content)) {
+            await fs.rm(filePath);
+        }
+    }
+}
+
+function legacyY3MakerMcpSettingsPaths(plan: AiDevEnvironmentPlan): string[] {
+    return uniquePaths([
+        path.join(path.dirname(plan.gitignorePath), ...LEGACY_Y3MAKER_MCP_SETTINGS_RELATIVE_PATH),
+        path.join(path.dirname(plan.scriptAgentsPath), ...LEGACY_Y3MAKER_MCP_SETTINGS_RELATIVE_PATH),
+    ]);
+}
+
+function isObsoleteY3MakerMcpSettings(content: string): boolean {
+    try {
+        return isObsoleteY3MakerMcpSettingsJson(content);
+    } catch {
+        return false;
+    }
+}
+
+function uniquePaths(filePaths: string[]): string[] {
+    const seen = new Set<string>();
+    const result: string[] = [];
+    for (const filePath of filePaths) {
+        const normalized = normalizeFsPath(path.resolve(filePath));
+        if (!seen.has(normalized)) {
+            seen.add(normalized);
+            result.push(filePath);
+        }
+    }
+    return result;
 }
 
 function hasJsonConfigConflict(content: string, check: (content: string) => boolean): boolean {
@@ -122,9 +244,9 @@ function hasJsonConfigConflict(content: string, check: (content: string) => bool
     }
 }
 
-async function collectManagedFileConflict(filePath: string, conflicts: string[]): Promise<void> {
+async function collectManagedFileConflict(filePath: string, expectedContent: string, legacyExpectedContent: string, conflicts: string[]): Promise<void> {
     const content = await readTextIfExists(filePath);
-    if (content !== undefined && !isManagedAiDevEnvironmentFile(content)) {
+    if (content !== undefined && mergeManagedAiDevEnvironmentFile(content, expectedContent, legacyExpectedContent) === undefined) {
         conflicts.push(filePath);
     }
 }
@@ -186,12 +308,13 @@ async function directoryExists(dirPath: string): Promise<boolean> {
     }
 }
 
-async function writeManagedFile(filePath: string, content: string): Promise<void> {
+async function writeManagedFile(filePath: string, content: string, legacyContent: string): Promise<void> {
     const existing = await readTextIfExists(filePath);
-    if (existing !== undefined && !isManagedAiDevEnvironmentFile(existing)) {
+    const merged = mergeManagedAiDevEnvironmentFile(existing, content, legacyContent);
+    if (merged === undefined) {
         throw new Error(l10n.t('拒绝覆盖用户自定义文件：{0}', filePath));
     }
-    await writeText(filePath, `${content.trimEnd()}\n`);
+    await writeText(filePath, merged);
 }
 
 async function writeText(filePath: string, content: string): Promise<void> {
