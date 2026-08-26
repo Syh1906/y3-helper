@@ -30,7 +30,7 @@ const lock = JSON.parse(read('package-lock.json'));
 assert(pkg.name === 'y3-helper-xiaowei', 'package.json name must be y3-helper-xiaowei');
 assert(pkg.displayName === 'Y3开发助手（小为版）', 'package.json displayName must identify the Xiaowei edition');
 assert(pkg.publisher === 'syh1906', 'package.json publisher must be syh1906');
-assert(/^1\.0\.\d+$/.test(pkg.version), 'package.json version must stay on the 1.0.x Xiaowei edition line');
+assert(/^1\.\d+\.\d+$/.test(pkg.version), 'package.json version must stay on the 1.x Xiaowei edition line');
 assert(pkg.repository && pkg.repository.url === 'https://github.com/Syh1906/y3-helper', 'repository.url must point to Syh1906/y3-helper');
 assert(pkg.scripts && pkg.scripts['package:vsix'], 'package:vsix script must exist');
 assert(pkg.scripts['package:vsix'].includes('scripts/package-vsix.js'), 'package:vsix must use scripts/package-vsix.js');
@@ -46,6 +46,7 @@ assert(lock.packages[''].version === pkg.version, 'package-lock packages root ve
 assert(!exists('.github/workflows/publish.yml'), 'publish.yml must be removed');
 assert(!exists('.github/workflows/mirror.yml'), 'mirror.yml must be removed');
 assert(read('.vscodeignore').includes('.codemaker/'), '.vscodeignore must exclude internal .codemaker workspace files from VSIX');
+assert(read('.vscodeignore').includes('.codegraph/'), '.vscodeignore must exclude local .codegraph cache files from VSIX');
 assert(read('.github/workflows/build.yml').includes('node scripts/verify-xiaowei-edition.js'), 'build workflow must run the Xiaowei edition verifier');
 assert(read('.github/workflows/build.yml').includes('npm run package:vsix'), 'build workflow must reuse the Xiaowei edition VSIX packaging script');
 

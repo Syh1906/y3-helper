@@ -829,6 +829,8 @@ end
 
 function event.exit()
     sendToMaster 'exitWorker' {}
+    -- 先通知 Master 更新生命周期，再释放当前 Worker 通道。
+    channel.destroy(WorkerChannel)
 end
 
 hookmgr.init(function(name, ...)

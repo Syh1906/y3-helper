@@ -24,6 +24,7 @@ webpack.config.json
 .worktrees/
 resources/webview_source_code/
 .codemaker/
+.codegraph/
 scripts/
 sync_scripts/
 文档/

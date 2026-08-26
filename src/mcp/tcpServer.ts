@@ -18,6 +18,7 @@ import {
     createProjectContext,
     createToolWorkflows,
 } from './agentContext';
+import { createMcpServerInfo } from './serverInfo';
 
 const UI_PACKAGE_KEY = '\u754c\u9762';
 const UI_CANVAS_KEY = '\u753b\u677f';
@@ -43,6 +44,7 @@ export class TCPServer extends vscode.Disposable {
     private httpServer?: http.Server;
     private readonly sessionManager: GameSessionManager;
     private readonly mcpSessions = new Map<string, MCPSession>();
+    private readonly version: string;
 
     private readonly UI_TYPE_NAMES: Record<number, string> = {
         1: 'Button',
@@ -56,8 +58,9 @@ export class TCPServer extends vscode.Disposable {
         38: 'Sequence_Animation',
     };
 
-    constructor() {
+    constructor(version: string) {
         super(() => this.dispose());
+        this.version = version;
         this.sessionManager = new GameSessionManager();
     }
 
@@ -290,10 +293,7 @@ export class TCPServer extends vscode.Disposable {
     }
 
     private createMcpServer(): McpServer {
-        const server = new McpServer({
-            name: 'y3-helper',
-            version: '1.0.0'
-        });
+        const server = new McpServer(createMcpServerInfo(this.version));
 
         this.registerAgentResources(server);
         this.registerAgentPrompts(server);
@@ -312,37 +312,45 @@ export class TCPServer extends vscode.Disposable {
 
         server.registerTool('execute_lua', {
             title: '执行 Lua 片段',
-            description: '在已连接的运行中游戏客户端执行 Lua 代码，并返回执行后捕获到的新增日志。需要已有活动游戏会话和客户端连接；只用于明确的小范围运行时验证。',
+            description: '在已连接的运行中游戏客户端执行 Lua 代码，并返回执行后捕获到的新增日志。可读取 get_game_status 返回的 clients[].slot，并将该编号作为 clientSlot 传入以指定游戏窗口；未指定时使用当前会话绑定的客户端。只用于明确的小范围运行时验证。',
             inputSchema: {
-                code: z.string()
+                code: z.string(),
+                clientSlot: z.number().optional()
             }
-        }, async ({ code }) => this.runTool(async () => await this.sessionManager.executeLua({ code })));
+        }, async ({ code, clientSlot }) => this.runTool(async () => await this.sessionManager.executeLua({ code, clientSlot })));
 
         server.registerTool('quick_restart', {
             title: '快速重启游戏',
-            description: '向运行中的游戏发送 .rr 快速重启命令，等待客户端重新连接，并返回重启期间新增日志。需要已有活动游戏会话和客户端连接。',
-            inputSchema: {}
-        }, async () => this.runTool(async () => await this.sessionManager.quickRestart()));
+            description: '向运行中的游戏发送 .rr 快速重启命令，等待客户端重新连接，并返回重启后的日志。可读取 get_game_status 返回的 clients[].slot，并将该编号作为 clientSlot 传入以只重启指定窗口；未指定时重启当前会话绑定的客户端。',
+            inputSchema: {
+                clientSlot: z.number().optional()
+            }
+        }, async ({ clientSlot }) => this.runTool(async () => await this.sessionManager.quickRestart({ clientSlot })));
 
         server.registerTool('stop_game', {
             title: '停止游戏',
-            description: '停止当前 Y3 游戏会话。该操作会向本地玩家发送退出 Lua 并清理 MCP 游戏会话状态，会影响本地正在运行的游戏。',
-            inputSchema: {}
-        }, async () => this.runTool(async () => await this.sessionManager.stopGame({})));
+            description: '停止 Y3 游戏。可读取 get_game_status 返回的 clients[].slot，并将该编号作为 clientSlot 传入以只停止指定窗口；未指定时停止当前会话绑定的客户端并清理 MCP 游戏会话状态。该操作会影响本地正在运行的游戏。',
+            inputSchema: {
+                clientSlot: z.number().optional()
+            }
+        }, async ({ clientSlot }) => this.runTool(async () => await this.sessionManager.stopGame({ clientSlot })));
 
         server.registerTool('get_logs', {
             title: '读取游戏日志',
-            description: '读取当前 MCP 游戏会话捕获到的最近 N 行日志。默认读取 100 行；没有活动会话时会返回失败状态。',
+            description: '读取游戏窗口捕获到的最近 N 行日志，默认读取 100 行。可读取 get_game_status 返回的 clients[].slot，并将该编号作为 clientSlot 传入以指定窗口；未指定时读取当前会话绑定客户端的日志。',
             inputSchema: {
-                limit: z.number().optional()
+                limit: z.number().optional(),
+                clientSlot: z.number().optional()
             }
-        }, async ({ limit }) => this.runTool(async () => await this.sessionManager.getLogs({ limit })));
+        }, async ({ limit, clientSlot }) => this.runTool(async () => await this.sessionManager.getLogs({ limit, clientSlot })));
 
         server.registerTool('capture_screenshot', {
             title: '捕获游戏截图',
-            description: '请求运行中的游戏写出截图文件，并返回截图路径。调用方需要用自己的图片读取能力查看该文件；不能只根据路径猜测截图内容。',
-            inputSchema: {}
-        }, async () => this.runTool(async () => await this.sessionManager.captureScreenshot()));
+            description: '请求运行中的游戏写出截图文件，并返回截图路径。可读取 get_game_status 返回的 clients[].slot，并将该编号作为 clientSlot 传入以指定窗口；未指定时使用当前会话绑定的客户端。调用方必须读取截图文件后再描述画面。',
+            inputSchema: {
+                clientSlot: z.number().optional()
+            }
+        }, async ({ clientSlot }) => this.runTool(async () => await this.sessionManager.captureScreenshot({ clientSlot })));
 
         server.registerTool('read_problems_lua', {
             title: '读取 Lua 诊断',

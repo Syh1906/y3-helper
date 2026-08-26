@@ -20,7 +20,7 @@ npm run package:vsix
 生成的安装包位于：
 
 ```text
-dist/vsix/y3-helper-xiaowei-1.0.9.vsix
+dist/vsix/y3-helper-xiaowei-<version>.vsix
 ```
 
 在 VSCode 中按 `Ctrl+Shift+P`，输入 `Extensions: Install from VSIX...`，选择该 `.vsix` 文件安装。
@@ -34,6 +34,8 @@ dist/vsix/y3-helper-xiaowei-1.0.9.vsix
 ## 功能面板
 
 包含“启动游戏”、“在编辑器中打开”、“查看日志”等常用功能。当前不会显示右侧 `Y3Maker` 面板，也不会在启动时拉起 CodeMaker API Server。
+
+多开模式会读取工程阵营配置。你可以选择参与测试的玩家，为每个玩家绑定本地存档昵称，并按玩家启用或关闭 Lua 调试。
 
 当使用此助手启动游戏后，游戏会连接到开发助手，并额外提供以下功能：
 
@@ -104,6 +106,8 @@ http://127.0.0.1:8766/mcp
 4. 用支持 Streamable HTTP MCP 的客户端连接 `http://127.0.0.1:8766/mcp`
 
 侧边栏 `MCP Server` 节点会显示当前本地服务状态：`运行中`、`未运行` 或 `设置关闭`。这里的“启动 / 停止 MCP Server”只控制扩展内置的本地 8766 服务，不会修改 Codex / Claude 项目 MCP 配置里的启用状态。
+
+连接多个游戏窗口时，先调用 `get_game_status` 读取 `clients[].slot`。将该编号作为 `clientSlot` 传给执行 Lua、快速重启、停止游戏、读取日志或捕获截图工具，即可选择目标窗口。编号在该窗口本次连接期间保持不变，窗口断开后可以被新窗口复用。
 
 需要启用或禁用 Codex / Claude 项目 MCP 配置时，请打开 `MCP Server/Agent 接入中心`，使用“启用 AI MCP 项目配置”或“禁用 AI MCP 项目配置”。
 

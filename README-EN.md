@@ -20,7 +20,7 @@ npm run package:vsix
 The VSIX package is generated at:
 
 ```text
-dist/vsix/y3-helper-xiaowei-1.0.9.vsix
+dist/vsix/y3-helper-xiaowei-<version>.vsix
 ```
 
 In VSCode, run `Extensions: Install from VSIX...` and select the generated file.
@@ -36,6 +36,8 @@ Y3 Helper supports common Y3 map development tasks:
 5. Excel table import
 6. Plugin scripts
 7. Built-in MCP HTTP server
+
+Multi-instance mode reads the project's faction configuration. You can select test players, bind a local archive nickname to each player, and enable or disable Lua debugging per player.
 
 ## MCP
 
@@ -54,6 +56,8 @@ http://127.0.0.1:8766/mcp
 ```
 
 The sidebar `MCP Server` node shows the current local server state: running, not running, or disabled by settings. Starting or stopping the MCP server only controls the local 8766 service inside the extension. It does not change the enabled state in Codex or Claude project MCP configuration files.
+
+When multiple game windows are connected, call `get_game_status` first and read `clients[].slot`. Pass that number as `clientSlot` to the Lua execution, quick restart, stop game, log, or screenshot tool to select a window. The number remains stable for the current connection and can be reused after that window disconnects.
 
 To enable or disable Codex / Claude project MCP configuration, open `MCP Server -> Agent 接入中心` and use the AI MCP project config actions.
 

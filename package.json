@@ -3,7 +3,7 @@
     "displayName": "Y3开发助手（小为版）",
     "description": "",
     "publisher": "syh1906",
-    "version": "1.0.9",
+    "version": "1.1.0",
     "repository": {
         "url": "https://github.com/Syh1906/y3-helper"
     },
@@ -55,6 +55,11 @@
                 }
             ],
             "view/item/context": [
+                {
+                    "command": "y3-helper.debug.toggle",
+                    "when": "view == y3-helper.mainMenu && viewItem == multiPlayerRole",
+                    "group": "inline"
+                },
                 {
                     "command": "y3-helper.openFile",
                     "when": "view == y3-helper.editorTableView && viewItem == json",
@@ -167,6 +172,11 @@
             ]
         },
         "commands": [
+            {
+                "command": "y3-helper.debug.toggle",
+                "title": "%切换调试%",
+                "icon": "$(debug)"
+            },
             {
                 "command": "y3-helper.initProject",
                 "title": "初始化开发环境",

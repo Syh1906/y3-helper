@@ -16,7 +16,6 @@ local threadCatalog = {}
 local threadStatus = {}
 local threadName = {}
 local terminateDebuggeeCallback
-local exitMaster = false
 local quit = false
 
 local function genThreadId()
@@ -170,10 +169,9 @@ function mgr.exitWorker(w)
     end
     threadStatus[w] = nil
     threadName[w] = nil
-    if exitMaster then
-        if next(threadChannel) == nil then
-            quit = true
-        end
+    -- 最后一个调试 Worker 退出后才结束共享 Master。
+    if next(threadChannel) == nil then
+        quit = true
     end
 end
 
@@ -206,14 +204,6 @@ local function update_once()
         local ok, w, cmd, msg = masterThread:pop()
         if not ok then
             break
-        end
-        if cmd == "EXIT" then
-            update_redirect()
-            exitMaster = true
-            if next(threadChannel) == nil then
-                quit = true
-            end
-            return
         end
         if threadCMD[cmd] then
             threadCMD[cmd](threadCatalog[w] or w, msg)
@@ -260,6 +250,8 @@ function mgr.update()
     local event = require 'backend.master.event'
     event.terminated()
     socket.closeall()
+    -- Master 完成关闭后再释放共享通道，避免后续 Worker 连接旧通道。
+    channel.destroy "DbgMaster"
 end
 
 function mgr.setClient(c)
