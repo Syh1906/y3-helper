@@ -8,15 +8,20 @@
 
 ## [1.1.0] - 2026-08-26
 
+### 上游同步
+
+- 选择性同步 [y3-editor/y3-helper](https://github.com/y3-editor/y3-helper) 从 `2.1.1`（`1aee0ac`）到 `2.1.3`（`9d910d9`）之间与小为版路线兼容的更新。
+- 同步后的实现继续使用小为版现有的 Agent 接入中心和 AI/MCP 配置流程。
+
 ### 新增
 
-- 多开模式根据编辑器阵营配置列出可用玩家，支持为每个玩家选择本地存档昵称并单独切换 Lua 调试。
-- MCP 游戏工具支持读取 `get_game_status` 返回的 `clients[].slot`，并将该编号作为 `clientSlot` 选择游戏窗口，可分别执行 Lua、快速重启、停止游戏、读取日志和捕获截图。
+- 多开模式根据编辑器阵营配置列出可用玩家，支持为每个玩家选择本地存档昵称并单独切换 Lua 调试。来源：[BAIM00 / `9e190c4`](https://github.com/y3-editor/y3-helper/commit/9e190c4838a87d46457f9c8d02f929002e21b644)。
+- MCP 游戏工具支持读取 `get_game_status` 返回的 `clients[].slot`，并将该编号作为 `clientSlot` 选择游戏窗口，可分别执行 Lua、快速重启、停止游戏、读取日志和捕获截图。来源：[zhuyinhao01 / `df4fbb5`](https://github.com/y3-editor/y3-helper/commit/df4fbb57e201c90937165def4811dd6c29268cbe)。
 
 ### 修复
 
-- 修复地图工程刚打开时，元数据生成可能早于地图列表加载完成的问题。
-- 修复多玩家调试中单个客户端切换地图后，其他客户端调试会话被一并等待的问题。
+- 修复地图工程刚打开时，元数据生成可能早于地图列表加载完成的问题。来源：[BAIM00 / `eb2549e`](https://github.com/y3-editor/y3-helper/commit/eb2549e64d4cdfa6cdce9adc7cb57254b114b124)。
+- 修复多玩家调试中单个客户端切换地图后，其他客户端调试会话被一并等待的问题。来源：[BAIM00 / `df25374`](https://github.com/y3-editor/y3-helper/commit/df253743602b309e99ade1a7b47b07da1246683f)。
 - 修复通过 `clientSlot` 停止当前会话窗口后，MCP 游戏会话状态未及时刷新的问题。
 
 ## [1.0.9] - 2026-07-09
