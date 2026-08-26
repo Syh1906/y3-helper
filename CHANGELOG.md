@@ -23,6 +23,7 @@
 - 修复地图工程刚打开时，元数据生成可能早于地图列表加载完成的问题。来源：[BAIM00 / `eb2549e`](https://github.com/y3-editor/y3-helper/commit/eb2549e64d4cdfa6cdce9adc7cb57254b114b124)。
 - 修复多玩家调试中单个客户端切换地图后，其他客户端调试会话被一并等待的问题。来源：[BAIM00 / `df25374`](https://github.com/y3-editor/y3-helper/commit/df253743602b309e99ade1a7b47b07da1246683f)。
 - 修复通过 `clientSlot` 停止当前会话窗口后，MCP 游戏会话状态未及时刷新的问题。
+- 修复 MCP 服务向客户端报告的版本号固定为 `1.0.0` 的问题，改为与扩展版本一致。
 
 ## [1.0.9] - 2026-07-09
 
